@@ -1,0 +1,503 @@
+from fastapi import FastAPI, HTTPException, Query
+from sqlalchemy import create_engine, text
+import redis
+import os
+import pandas as pd 
+from ai_engine import trading_ai
+from dotenv import load_dotenv
+from indicators import *
+from binance_client import BinanceClient, extract_close_prices
+from typing import List, Optional
+from pydantic import BaseModel
+from alert_service import AlertService
+
+load_dotenv()
+
+app = FastAPI(title="Trading AI Platform", version="1.0.0")
+
+# Database connection
+DATABASE_URL = "postgresql://trading_user:trading_pass_2024@postgres:5432/trading_db"
+engine = create_engine(DATABASE_URL)
+
+# Redis connection  
+redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+
+# Binance client
+binance_client = BinanceClient()
+
+alert_service = AlertService(DATABASE_URL)
+
+class PriceData(BaseModel):
+    prices: List[float]
+    fast_period: Optional[int] = 12
+    slow_period: Optional[int] = 26
+    signal_period: Optional[int] = 9
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Trading AI Platform API", 
+        "status": "running",
+        "features": [
+            "Real-time data from Binance",
+            "MACD Technical Analysis",
+            "Multiple cryptocurrency support"
+        ]
+    }
+
+@app.get("/health")
+async def health_check():
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT 1"))
+            db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    try:
+        redis_client.ping()
+        redis_status = "connected"
+    except Exception as e:
+        redis_status = f"error: {str(e)}"
+    
+    # اختبار Binance API
+    try:
+        price = binance_client.get_symbol_price("BTCUSDT")
+        binance_status = "connected" if price else "error"
+    except Exception as e:
+        binance_status = f"error: {str(e)}"
+    
+    return {
+        "database": db_status,
+        "redis": redis_status,
+        "binance_api": binance_status,
+        "api": "healthy"
+    }
+
+@app.get("/symbols")
+async def get_available_symbols():
+    """
+    الحصول على قائمة العملات المتاحة
+    """
+    try:
+        symbols = binance_client.get_available_symbols()
+        return {
+            "symbols": symbols,
+            "count": len(symbols),
+            "note": "Popular USDT trading pairs"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/price/{symbol}")
+async def get_current_price(symbol: str):
+    """
+    الحصول على السعر الحالي لعملة
+    """
+    try:
+        price = binance_client.get_symbol_price(symbol)
+        if price is None:
+            raise HTTPException(status_code=404, detail=f"Symbol {symbol} not found")
+        
+        return {
+            "symbol": symbol.upper(),
+            "price": price,
+            "timestamp": int(pd.Timestamp.now().timestamp())
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/macd/{symbol}")
+async def get_macd_analysis(
+    symbol: str,
+    interval: str = Query(default="1h", description="Timeframe: 1m, 5m, 15m, 1h, 4h, 1d"),
+    limit: int = Query(default=100, ge=50, le=500, description="Number of data points")
+):
+    """
+    تحليل MACD لعملة محددة مع بيانات حقيقية من Binance
+    """
+    try:
+        # جلب البيانات من Binance
+        klines_data = binance_client.get_klines(symbol, interval, limit)
+        if not klines_data:
+            raise HTTPException(status_code=404, detail=f"Could not fetch data for {symbol}")
+        
+        # استخراج أسعار الإغلاق
+        close_prices = extract_close_prices(klines_data)
+        
+        # حساب MACD
+        macd_result = calculate_macd(close_prices)
+        
+        # معلومات إضافية
+        latest_candle = klines_data[-1]
+        
+        return {
+            "symbol": symbol.upper(),
+            "interval": interval,
+            "data_points": len(close_prices),
+            "current_price": latest_candle["close"],
+            "price_change_24h": round(((latest_candle["close"] - klines_data[-24]["close"]) / klines_data[-24]["close"]) * 100, 2) if len(klines_data) >= 24 else None,
+            "volume": latest_candle["volume"],
+            "last_update": pd.Timestamp.fromtimestamp(latest_candle["timestamp"]/1000).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "macd_analysis": macd_result
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/macd/sample")
+async def get_sample_macd():
+    """
+    حساب MACD مع بيانات عينة للاختبار
+    """
+    try:
+        sample_prices = generate_sample_data(50)
+        macd_result = calculate_macd(sample_prices)
+        
+        return {
+            "symbol": "SAMPLE",
+            "data_points": len(sample_prices),
+            "latest_price": sample_prices[-1],
+            "macd_analysis": macd_result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/macd/calculate")
+async def calculate_macd_endpoint(data: PriceData):
+    """
+    حساب MACD لبيانات مخصصة
+    """
+    try:
+        if len(data.prices) < data.slow_period:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Need at least {data.slow_period} data points"
+            )
+        
+        macd_result = calculate_macd(
+            data.prices, 
+            data.fast_period, 
+            data.slow_period, 
+            data.signal_period
+        )
+        
+        return {
+            "input_data_points": len(data.prices),
+            "parameters": {
+                "fast_period": data.fast_period,
+                "slow_period": data.slow_period,
+                "signal_period": data.signal_period
+            },
+            "macd_analysis": macd_result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/analysis/{symbol}")
+async def get_comprehensive_analysis(
+    symbol: str,
+    interval: str = Query(default="1h", description="Timeframe: 1m, 5m, 15m, 1h, 4h, 1d"),
+    limit: int = Query(default=200, ge=100, le=500, description="Number of data points")
+):
+    """
+    تحليل شامل يجمع جميع المؤشرات الفنية
+    """
+    try:
+        # جلب البيانات من Binance
+        klines_data = binance_client.get_klines(symbol, interval, limit)
+        if not klines_data:
+            raise HTTPException(status_code=404, detail=f"Could not fetch data for {symbol}")
+        
+        # استخراج أسعار الإغلاق
+        close_prices = extract_close_prices(klines_data)
+        
+        # التحليل الشامل
+        analysis_result = comprehensive_analysis(close_prices)
+        
+        # معلومات إضافية
+        latest_candle = klines_data[-1]
+        
+        return {
+            "symbol": symbol.upper(),
+            "interval": interval,
+            "data_points": len(close_prices),
+            "current_price": latest_candle["close"],
+            "volume": latest_candle["volume"],
+            "last_update": pd.Timestamp.fromtimestamp(latest_candle["timestamp"]/1000).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "comprehensive_analysis": analysis_result
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/rsi/{symbol}")
+async def get_rsi_analysis(
+    symbol: str,
+    interval: str = Query(default="1h", description="Timeframe"),
+    period: int = Query(default=14, ge=5, le=50, description="RSI period")
+):
+    """
+    تحليل مؤشر RSI منفرد
+    """
+    try:
+        klines_data = binance_client.get_klines(symbol, interval, 100)
+        if not klines_data:
+            raise HTTPException(status_code=404, detail=f"Could not fetch data for {symbol}")
+        
+        close_prices = extract_close_prices(klines_data)
+        rsi_result = calculate_rsi(close_prices, period)
+        
+        latest_candle = klines_data[-1]
+        
+        return {
+            "symbol": symbol.upper(),
+            "interval": interval,
+            "current_price": latest_candle["close"],
+            "rsi_analysis": rsi_result
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/alerts")
+async def get_alerts(
+    symbol: str = Query(None, description="Filter by symbol"),
+    unread_only: bool = Query(False, description="Show only unread alerts"),
+    limit: int = Query(50, ge=1, le=100, description="Number of alerts to return")
+):
+    """جلب التنبيهات"""
+    try:
+        alerts = alert_service.get_alerts(symbol, unread_only, limit)
+        
+        alerts_data = []
+        for alert in alerts:
+            alerts_data.append({
+                "id": alert.id,
+                "symbol": alert.symbol,
+                "type": alert.alert_type,
+                "message": alert.message,
+                "price": alert.price,
+                "indicator_value": alert.indicator_value,
+                "severity": alert.severity,
+                "is_read": alert.is_read,
+                "created_at": alert.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+            })
+        
+        return {
+            "alerts": alerts_data,
+            "count": len(alerts_data),
+            "unread_count": len([a for a in alerts_data if not a["is_read"]])
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/alerts/{alert_id}/read")
+async def mark_alert_read(alert_id: int):
+    """تمييز التنبيه كمقروء"""
+    try:
+        alert = alert_service.mark_alert_as_read(alert_id)
+        if not alert:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        
+        return {"message": "Alert marked as read", "alert_id": alert_id}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/monitor/{symbol}")
+async def monitor_symbol_with_alerts(
+    symbol: str,
+    interval: str = Query(default="1h", description="Timeframe"),
+    create_alerts: bool = Query(True, description="Create alerts if conditions met")
+):
+    """مراقبة عملة مع إنشاء تنبيهات"""
+    try:
+        # جلب التحليل الشامل
+        klines_data = binance_client.get_klines(symbol, interval, 200)
+        if not klines_data:
+            raise HTTPException(status_code=404, detail=f"Could not fetch data for {symbol}")
+        
+        close_prices = extract_close_prices(klines_data)
+        analysis_result = comprehensive_analysis(close_prices)
+        
+        latest_candle = klines_data[-1]
+        
+        current_data = {
+            "current_price": latest_candle["close"],
+            "comprehensive_analysis": analysis_result
+        }
+        
+        # إنشاء تنبيهات إذا طُلب ذلك
+        new_alerts = []
+        if create_alerts:
+            new_alerts = alert_service.check_and_create_alerts(symbol, current_data)
+        
+        return {
+            "symbol": symbol.upper(),
+            "interval": interval,
+            "current_price": latest_candle["close"],
+            "analysis": analysis_result,
+            "new_alerts_created": len(new_alerts),
+            "alerts_details": [
+                {
+                    "type": alert.alert_type,
+                    "message": alert.message,
+                    "severity": alert.severity
+                } for alert in new_alerts
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/ai/train/{symbol}")
+async def train_ai_model(
+    symbol: str,
+    interval: str = Query(default="1h", description="Training timeframe"),
+    limit: int = Query(default=500, ge=100, le=1000, description="Training data points")
+):
+    """
+    تدريب نموذج الذكاء الصناعي
+    """
+    try:
+        # جلب البيانات التاريخية للتدريب
+        klines_data = binance_client.get_klines(symbol, interval, limit)
+        if not klines_data:
+            raise HTTPException(status_code=404, detail=f"Could not fetch training data for {symbol}")
+        
+        # تدريب النموذج
+        training_result = trading_ai.train_models(klines_data)
+        
+        return {
+            "symbol": symbol.upper(),
+            "training_data": {
+                "interval": interval,
+                "data_points": limit,
+                "actual_points_used": len(klines_data)
+            },
+            "training_result": training_result
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/ai/predict/{symbol}")
+async def get_ai_prediction(
+    symbol: str,
+    interval: str = Query(default="1h", description="Data timeframe"),
+    hours_ahead: int = Query(default=1, ge=1, le=24, description="Prediction horizon in hours")
+):
+    """
+    التنبؤ بالسعر باستخدام الذكاء الصناعي
+    """
+    try:
+        # محاولة تحميل النماذج المحفوظة
+        if not trading_ai.is_trained:
+            trading_ai.load_models()
+        
+        if not trading_ai.is_trained:
+            return {
+                "error": "AI model not trained yet",
+                "suggestion": f"Train the model first using: POST /ai/train/{symbol}"
+            }
+        
+        # جلب البيانات الحالية للتنبؤ
+        klines_data = binance_client.get_klines(symbol, interval, 100)
+        if not klines_data:
+            raise HTTPException(status_code=404, detail=f"Could not fetch data for {symbol}")
+        
+        # التنبؤ
+        prediction_result = trading_ai.predict_future(klines_data, hours_ahead)
+        
+        latest_candle = klines_data[-1]
+        
+        return {
+            "symbol": symbol.upper(),
+            "interval": interval,
+            "current_market_data": {
+                "price": latest_candle["close"],
+                "volume": latest_candle["volume"],
+                "timestamp": pd.Timestamp.fromtimestamp(latest_candle["timestamp"]/1000).strftime("%Y-%m-%d %H:%M:%S UTC")
+            },
+            "ai_prediction": prediction_result
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/ai/combined/{symbol}")
+async def get_combined_ai_analysis(
+    symbol: str,
+    interval: str = Query(default="1h", description="Analysis timeframe")
+):
+    """
+    تحليل شامل يجمع التحليل الفني والذكاء الصناعي
+    """
+    try:
+        # جلب البيانات
+        klines_data = binance_client.get_klines(symbol, interval, 200)
+        if not klines_data:
+            raise HTTPException(status_code=404, detail=f"Could not fetch data for {symbol}")
+        
+        close_prices = extract_close_prices(klines_data)
+        
+        # التحليل الفني التقليدي
+        technical_analysis = comprehensive_analysis(close_prices)
+        
+        # التنبؤ بالذكاء الصناعي
+        ai_prediction = {"error": "AI model not trained"}
+        if trading_ai.is_trained or trading_ai.load_models():
+            ai_prediction = trading_ai.predict_future(klines_data)
+        
+        # دمج التوصيات
+        final_recommendation = combine_recommendations(
+            technical_analysis.get("overall_recommendation"),
+            ai_prediction.get("ai_recommendation") if "ai_recommendation" in ai_prediction else None
+        )
+        
+        latest_candle = klines_data[-1]
+        
+        return {
+            "symbol": symbol.upper(),
+            "interval": interval,
+            "current_price": latest_candle["close"],
+            "last_update": pd.Timestamp.fromtimestamp(latest_candle["timestamp"]/1000).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "technical_analysis": technical_analysis,
+            "ai_prediction": ai_prediction,
+            "combined_recommendation": final_recommendation
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def combine_recommendations(technical_rec: str, ai_rec: str) -> Dict[str, Any]:
+    """دمج توصيات التحليل الفني والذكاء الصناعي"""
+    if not ai_rec:
+        return {
+            "final_recommendation": technical_rec,
+            "confidence": "متوسطة",
+            "reasoning": "اعتماد على التحليل الفني فقط"
+        }
+    
+    if technical_rec == ai_rec:
+        return {
+            "final_recommendation": technical_rec,
+            "confidence": "عالية جداً",
+            "reasoning": "توافق بين التحليل الفني والذكاء الصناعي"
+        }
+    elif technical_rec == "HOLD" or ai_rec == "HOLD":
+        return {
+            "final_recommendation": "HOLD",
+            "confidence": "متوسطة",
+            "reasoning": "تضارب في الإشارات - من الأفضل الانتظار"
+        }
+    else:
+        return {
+            "final_recommendation": "HOLD",
+            "confidence": "منخفضة",
+            "reasoning": "تضارب قوي بين التحليل الفني والذكاء الصناعي"
+        }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
