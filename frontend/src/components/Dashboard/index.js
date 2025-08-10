@@ -1,17 +1,21 @@
-// components/Dashboard/index.js - مُصلح
-// ملف التصدير الرئيسي لمكونات Dashboard
-
-// تصدير المكون الرئيسي
+// Main export file for Dashboard components
 export { default } from './Dashboard';
 
-// تصدير المكونات الفرعية باستخدام named exports
+// Export sub-components with named exports
 export { AnalysisTab } from './AnalysisTab';
 export { PriceCard } from './PriceCard';
 export { DecisionCard } from './DecisionCard';
 export { ControlCard } from './ControlCard';
 export { TabNavigation } from './TabNavigation';
+export { PortfolioTab } from './PortfolioTab';
+export { InvestmentTab } from './InvestmentTab';
+export { TradingTab } from './TradingTab';
+export { BacktestTab } from './BacktestTab';
+export { ComparisonTab } from './ComparisonTab';
 
-// إذا كان لديك مكونات أخرى، أضفها هنا
-// export { PortfolioTab } from './PortfolioTab';
-// export { TradingTab } from './TradingTab';
-// export { BacktestTab } from './BacktestTab';
+// Export analysis components for enhanced view
+export { TechnicalAnalysisCard } from './TechnicalAnalysisCard';
+export { SimpleAICard } from './SimpleAICard';
+export { AdvancedAICard } from './AdvancedAICard';
+export { WyckoffAnalysisCard } from './WyckoffAnalysisCard';
+export { DetailedCalculations } from './DetailedCalculations';

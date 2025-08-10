@@ -1,4 +1,3 @@
-// components/Dashboard/BacktestTab.js - مكون المحاكاة المبسط والواضح
 import React, { useState } from 'react';
 import { 
   ClockIcon,
@@ -15,8 +14,9 @@ export const BacktestTab = ({ selectedSymbol, analysisData }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState(7);
+  const [selectedStrategy, setSelectedStrategy] = useState('combined');
 
-  // الاستراتيجيات المتاحة
+  // Available strategies
   const strategies = [
     {
       id: 'technical',
@@ -48,7 +48,7 @@ export const BacktestTab = ({ selectedSymbol, analysisData }) => {
     }
   ];
 
-  // فترات الاختبار
+  // Test periods
   const periods = [
     { days: 7, label: 'أسبوع واحد', description: 'اختبار سريع' },
     { days: 14, label: 'أسبوعان', description: 'اختبار متوسط' },
@@ -56,16 +56,16 @@ export const BacktestTab = ({ selectedSymbol, analysisData }) => {
     { days: 90, label: '3 أشهر', description: 'اختبار عميق' }
   ];
 
-  // تشغيل المحاكاة
+  // Run backtest simulation
   const runBacktest = async () => {
     setIsRunning(true);
     setResults(null);
 
     try {
-      // محاكاة استدعاء API
+      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // توليد نتائج واقعية بناءً على التحليل الحالي
+      // Generate realistic results based on current analysis
       const mockResults = generateRealisticResults();
       setResults(mockResults);
     } catch (error) {
@@ -76,385 +76,335 @@ export const BacktestTab = ({ selectedSymbol, analysisData }) => {
     }
   };
 
-  // توليد نتائج واقعية
+  // Generate realistic results
   const generateRealisticResults = () => {
     const baseConfidence = analysisData?.ultimate_decision?.final_confidence || 60;
     const recommendation = analysisData?.ultimate_decision?.final_recommendation || 'HOLD';
     
-    // حساب نتائج منطقية بناءً على التحليل الحالي
+    // Calculate logical results based on current analysis
     const strategiesResults = strategies.map(strategy => {
       const accuracy = calculateAccuracy(strategy.id, baseConfidence);
       const profitLoss = calculateProfitLoss(strategy.id, accuracy, recommendation);
       const trades = Math.floor(selectedPeriod * (strategy.id === 'advanced_ai' ? 1.2 : 
-                                                  strategy.id === 'simple_ai' ? 0.8 : 1));
+                                                  strategy.id === 'simple_ai' ? 1.0 : 
+                                                  strategy.id === 'technical' ? 0.8 : 1.1));
       
       return {
-        ...strategy,
+        strategy: strategy.id,
+        name: strategy.name,
         accuracy: accuracy,
+        totalTrades: trades,
+        successfulTrades: Math.floor(trades * (accuracy / 100)),
         profitLoss: profitLoss,
-        trades: trades,
-        winRate: Math.round(accuracy * 0.9),
-        avgTrade: (profitLoss / trades).toFixed(2),
-        grade: getGrade(accuracy)
+        roi: (profitLoss / 10000) * 100, // Assuming 10k initial capital
+        maxDrawdown: Math.random() * 15 + 5, // 5-20%
+        sharpeRatio: (profitLoss > 0 ? Math.random() * 2 + 0.5 : Math.random() * 0.5),
+        color: strategy.color
       };
     });
 
-    // العثور على الأفضل والأسوأ
-    const sortedByAccuracy = [...strategiesResults].sort((a, b) => b.accuracy - a.accuracy);
-    const best = sortedByAccuracy[0];
-    const worst = sortedByAccuracy[sortedByAccuracy.length - 1];
-
     return {
       period: selectedPeriod,
+      symbol: selectedSymbol,
       strategies: strategiesResults,
       summary: {
-        best: best,
-        worst: worst,
-        averageAccuracy: Math.round(strategiesResults.reduce((sum, s) => sum + s.accuracy, 0) / strategiesResults.length),
-        totalTrades: strategiesResults.reduce((sum, s) => sum + s.trades, 0),
-        recommendation: getRecommendation(best, worst, baseConfidence)
-      },
-      timestamp: new Date().toLocaleString('ar-SA')
+        bestStrategy: strategiesResults.reduce((best, current) => 
+          current.roi > best.roi ? current : best
+        ),
+        averageROI: strategiesResults.reduce((sum, s) => sum + s.roi, 0) / strategiesResults.length,
+        totalTrades: strategiesResults.reduce((sum, s) => sum + s.totalTrades, 0)
+      }
     };
   };
 
-  // حساب الدقة بناءً على نوع الاستراتيجية
   const calculateAccuracy = (strategyId, baseConfidence) => {
-    const randomFactor = (Math.random() - 0.5) * 20; // تغيير عشوائي ±10%
+    const multipliers = {
+      'technical': 0.9,
+      'simple_ai': 1.0,
+      'advanced_ai': 1.1,
+      'combined': 1.05
+    };
     
-    let accuracy;
-    switch (strategyId) {
-      case 'technical':
-        accuracy = Math.max(45, Math.min(85, baseConfidence - 5 + randomFactor));
-        break;
-      case 'simple_ai':
-        accuracy = Math.max(40, Math.min(80, baseConfidence + randomFactor));
-        break;
-      case 'advanced_ai':
-        accuracy = Math.max(50, Math.min(90, baseConfidence + 10 + randomFactor));
-        break;
-      case 'combined':
-        accuracy = Math.max(55, Math.min(88, baseConfidence + 15 + randomFactor));
-        break;
-      default:
-        accuracy = 60;
-    }
-    
-    return Math.round(accuracy);
+    const baseAccuracy = Math.min(95, Math.max(45, baseConfidence * multipliers[strategyId]));
+    return Math.round(baseAccuracy + (Math.random() - 0.5) * 10);
   };
 
-  // حساب الربح/الخسارة
   const calculateProfitLoss = (strategyId, accuracy, recommendation) => {
-    const baseProfitability = (accuracy - 50) / 10; // كل 10% دقة إضافية = 1% ربح
-    const marketBias = recommendation === 'BUY' ? 1.2 : recommendation === 'SELL' ? 0.8 : 1;
-    const randomness = (Math.random() - 0.5) * 3; // تغيير عشوائي ±1.5%
+    let baseReturn = 0;
     
-    const profitLoss = baseProfitability * marketBias + randomness;
-    return parseFloat(profitLoss.toFixed(2));
-  };
-
-  // تحديد الدرجة
-  const getGrade = (accuracy) => {
-    if (accuracy >= 80) return 'ممتاز';
-    if (accuracy >= 70) return 'جيد جداً';
-    if (accuracy >= 60) return 'جيد';
-    if (accuracy >= 50) return 'مقبول';
-    return 'ضعيف';
-  };
-
-  // الحصول على توصية
-  const getRecommendation = (best, worst, confidence) => {
-    if (best.accuracy >= 75) {
-      return `الاستراتيجية ${best.name} تُظهر أداءً ممتازاً (${best.accuracy}%). يُنصح بالاعتماد عليها.`;
-    } else if (best.accuracy >= 65) {
-      return `الاستراتيجية ${best.name} تُظهر أداءً جيداً. يمكن استخدامها مع الحذر.`;
-    } else {
-      return `جميع الاستراتيجيات تُظهر أداءً متوسطاً. يُنصح بانتظار ظروف سوق أفضل.`;
-    }
+    // Base return based on recommendation
+    if (recommendation === 'BUY') baseReturn = Math.random() * 2000 + 500;
+    else if (recommendation === 'SELL') baseReturn = -(Math.random() * 1000 + 200);
+    else baseReturn = (Math.random() - 0.5) * 1000;
+    
+    // Adjust based on strategy and accuracy
+    const strategyMultipliers = {
+      'technical': 0.8,
+      'simple_ai': 1.0,
+      'advanced_ai': 1.3,
+      'combined': 1.1
+    };
+    
+    const accuracyBonus = (accuracy - 50) / 50; // -1 to 0.9
+    return Math.round(baseReturn * strategyMultipliers[strategyId] * (1 + accuracyBonus * 0.5));
   };
 
   return (
     <div className="space-y-6">
-      {/* مقدمة بسيطة */}
-      <div className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-xl p-6 border border-purple-500/30">
-        <div className="flex items-center space-x-3 space-x-reverse mb-4">
-          <div className="text-2xl">🧪</div>
-          <h2 className="text-2xl font-bold text-white">اختبار الاستراتيجيات</h2>
+      {/* Backtest Configuration */}
+      <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white">محاكاة أداء الاستراتيجيات</h2>
+          <ClockIcon className="w-6 h-6 text-blue-400" />
         </div>
-        <p className="text-gray-300 leading-relaxed">
-          اختبر أداء استراتيجيات التداول المختلفة على البيانات التاريخية لـ <span className="text-blue-400 font-semibold">{selectedSymbol}</span>.
-          هذا يساعدك في اختيار أفضل استراتيجية لاستثماراتك.
-        </p>
-        
-        {analysisData && (
-          <div className="mt-4 p-3 bg-blue-500/20 rounded-lg border border-blue-500/40">
-            <div className="text-blue-300 text-sm">
-              📊 سيتم اختبار الاستراتيجيات بناءً على التحليل الحالي: 
-              <span className="font-semibold ml-2">
-                {analysisData.ultimate_decision?.final_recommendation} 
-                ({analysisData.ultimate_decision?.final_confidence}% ثقة)
-              </span>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Strategy Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-3">اختيار الاستراتيجية للاختبار:</label>
+            <div className="space-y-2">
+              {strategies.map((strategy) => (
+                <button
+                  key={strategy.id}
+                  onClick={() => setSelectedStrategy(strategy.id)}
+                  className={`w-full text-right p-3 rounded-lg border transition-all ${
+                    selectedStrategy === strategy.id
+                      ? 'bg-blue-500/20 border-blue-500/50 text-white'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3 space-x-reverse">
+                    <span className="text-xl">{strategy.icon}</span>
+                    <div className="flex-1">
+                      <div className="font-semibold">{strategy.name}</div>
+                      <div className="text-xs text-gray-400">{strategy.description}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </div>
 
-      {/* اختيار الإعدادات */}
-      <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
-        <h3 className="text-xl font-semibold text-white mb-6">⚙️ إعدادات الاختبار</h3>
-        
-        {/* اختيار فترة الاختبار */}
-        <div className="mb-6">
-          <h4 className="text-white font-semibold mb-3">📅 فترة الاختبار:</h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {periods.map(period => (
-              <button
-                key={period.days}
-                onClick={() => setSelectedPeriod(period.days)}
-                className={`p-4 rounded-lg border transition-all ${
-                  selectedPeriod === period.days
-                    ? 'bg-blue-500/30 border-blue-400 text-blue-300'
-                    : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10'
-                }`}
-              >
-                <div className="font-semibold">{period.label}</div>
-                <div className="text-xs opacity-75">{period.description}</div>
-              </button>
-            ))}
+          {/* Period Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-3">فترة الاختبار:</label>
+            <div className="grid grid-cols-2 gap-3">
+              {periods.map((period) => (
+                <button
+                  key={period.days}
+                  onClick={() => setSelectedPeriod(period.days)}
+                  className={`p-3 rounded-lg border text-center transition-all ${
+                    selectedPeriod === period.days
+                      ? 'bg-green-500/20 border-green-500/50 text-white'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+                  }`}
+                >
+                  <div className="font-semibold">{period.label}</div>
+                  <div className="text-xs text-gray-400">{period.description}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Run Button */}
+            <button
+              onClick={runBacktest}
+              disabled={isRunning}
+              className="w-full mt-6 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 disabled:from-gray-500 disabled:to-gray-600 text-white py-4 rounded-xl font-semibold transition-all flex items-center justify-center space-x-2 space-x-reverse"
+            >
+              {isRunning ? (
+                <>
+                  <StopIcon className="w-5 h-5 animate-pulse" />
+                  <span>جاري تشغيل المحاكاة...</span>
+                </>
+              ) : (
+                <>
+                  <PlayIcon className="w-5 h-5" />
+                  <span>تشغيل المحاكاة</span>
+                </>
+              )}
+            </button>
           </div>
-        </div>
-
-        {/* معاينة الاستراتيجيات */}
-        <div className="mb-6">
-          <h4 className="text-white font-semibold mb-3">🎯 الاستراتيجيات التي سيتم اختبارها:</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {strategies.map(strategy => (
-              <div key={strategy.id} className={`p-4 rounded-lg bg-${strategy.color}-500/10 border border-${strategy.color}-500/30`}>
-                <div className="flex items-center space-x-3 space-x-reverse">
-                  <span className="text-2xl">{strategy.icon}</span>
-                  <div>
-                    <div className="text-white font-semibold">{strategy.name}</div>
-                    <div className="text-gray-400 text-sm">{strategy.description}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* زر بدء الاختبار */}
-        <div className="text-center">
-          <button
-            onClick={runBacktest}
-            disabled={isRunning}
-            className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 text-white px-8 py-4 rounded-xl font-semibold transition-all flex items-center space-x-3 space-x-reverse mx-auto"
-          >
-            {isRunning ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                <span>جاري الاختبار لـ {selectedPeriod} أيام...</span>
-              </>
-            ) : (
-              <>
-                <span>🚀</span>
-                <span>بدء اختبار الاستراتيجيات</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
 
-      {/* النتائج */}
+      {/* Loading State */}
+      {isRunning && (
+        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 text-center">
+          <div className="animate-pulse">
+            <ChartBarIcon className="w-16 h-16 text-blue-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-white mb-2">تشغيل المحاكاة...</h3>
+            <div className="text-gray-400 mb-4">
+              جاري تحليل {selectedPeriod} يوم من البيانات التاريخية
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2">
+              <div className="bg-blue-500 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Results Display */}
       {results && !isRunning && (
         <div className="space-y-6">
-          {results.error ? (
-            <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-6 text-center">
-              <div className="text-red-400 text-lg font-semibold">❌ {results.error}</div>
-            </div>
-          ) : (
-            <>
-              {/* ملخص سريع */}
-              <div className="bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-xl p-6 border border-green-500/30">
-                <h3 className="text-xl font-semibold text-white mb-4">🏆 الملخص السريع</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-green-400">{results.summary.best.accuracy}%</div>
-                    <div className="text-green-300">أفضل دقة</div>
-                    <div className="text-gray-400 text-sm">{results.summary.best.name}</div>
-                  </div>
-                  
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-blue-400">{results.summary.averageAccuracy}%</div>
-                    <div className="text-blue-300">متوسط الدقة</div>
-                    <div className="text-gray-400 text-sm">جميع الاستراتيجيات</div>
-                  </div>
-                  
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-purple-400">{results.summary.totalTrades}</div>
-                    <div className="text-purple-300">إجمالي الصفقات</div>
-                    <div className="text-gray-400 text-sm">خلال {results.period} أيام</div>
-                  </div>
-                </div>
-
-                <div className="bg-black/20 rounded-lg p-4">
-                  <div className="text-white font-semibold mb-2">💡 التوصية:</div>
-                  <div className="text-gray-300">{results.summary.recommendation}</div>
-                </div>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">أفضل استراتيجية</h3>
+                <TrophyIcon className="w-6 h-6 text-yellow-400" />
               </div>
+              <div className="text-2xl font-bold text-yellow-400 mb-2">
+                {results.summary.bestStrategy.name}
+              </div>
+              <div className="text-sm text-gray-400">
+                عائد: {results.summary.bestStrategy.roi.toFixed(2)}%
+              </div>
+            </div>
 
-              {/* تفاصيل كل استراتيجية */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {results.strategies.map(strategy => (
-                  <div key={strategy.id} className={`bg-${strategy.color}-500/10 rounded-xl p-6 border border-${strategy.color}-500/30`}>
-                    <div className="flex items-center space-x-3 space-x-reverse mb-4">
-                      <span className="text-2xl">{strategy.icon}</span>
-                      <div>
-                        <h4 className="text-white font-semibold text-lg">{strategy.name}</h4>
-                        <div className="text-gray-400 text-sm">{strategy.description}</div>
-                      </div>
-                    </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">متوسط العائد</h3>
+                <ChartBarIcon className="w-6 h-6 text-green-400" />
+              </div>
+              <div className={`text-2xl font-bold mb-2 ${
+                results.summary.averageROI >= 0 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {results.summary.averageROI.toFixed(2)}%
+              </div>
+              <div className="text-sm text-gray-400">لجميع الاستراتيجيات</div>
+            </div>
 
-                    <div className="space-y-3">
-                      {/* الدقة */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">🎯 الدقة:</span>
-                        <div className="flex items-center space-x-2 space-x-reverse">
-                          <span className={`font-bold ${
-                            strategy.accuracy >= 70 ? 'text-green-400' :
-                            strategy.accuracy >= 60 ? 'text-yellow-400' : 'text-red-400'
-                          }`}>
-                            {strategy.accuracy}%
-                          </span>
-                          <span className="text-gray-400">({strategy.grade})</span>
+            <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">إجمالي الصفقات</h3>
+                <BoltIcon className="w-6 h-6 text-blue-400" />
+              </div>
+              <div className="text-2xl font-bold text-white mb-2">
+                {results.summary.totalTrades}
+              </div>
+              <div className="text-sm text-gray-400">خلال {selectedPeriod} يوم</div>
+            </div>
+          </div>
+
+          {/* Detailed Results */}
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
+            <h3 className="text-lg font-semibold text-white mb-6">نتائج مفصلة لكل استراتيجية</h3>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-gray-400 border-b border-white/10">
+                    <th className="text-right pb-3">الاستراتيجية</th>
+                    <th className="text-right pb-3">دقة التوقعات</th>
+                    <th className="text-right pb-3">عدد الصفقات</th>
+                    <th className="text-right pb-3">الصفقات الناجحة</th>
+                    <th className="text-right pb-3">الربح/الخسارة</th>
+                    <th className="text-right pb-3">العائد %</th>
+                    <th className="text-right pb-3">أقصى انخفاض</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.strategies.map((strategy, index) => (
+                    <tr key={index} className="border-b border-white/5">
+                      <td className="py-4">
+                        <div className="flex items-center space-x-3 space-x-reverse">
+                          <div className={`w-3 h-3 rounded-full bg-${strategy.color}-400`}></div>
+                          <span className="text-white font-semibold">{strategy.name}</span>
                         </div>
-                      </div>
-
-                      {/* الربح/الخسارة */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">💰 الربح/الخسارة:</span>
-                        <span className={`font-bold ${
-                          strategy.profitLoss > 0 ? 'text-green-400' : 
-                          strategy.profitLoss < 0 ? 'text-red-400' : 'text-gray-400'
-                        }`}>
-                          {strategy.profitLoss > 0 ? '+' : ''}{strategy.profitLoss}%
-                        </span>
-                      </div>
-
-                      {/* معدل النجاح */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">✅ معدل النجاح:</span>
-                        <span className="text-white font-semibold">{strategy.winRate}%</span>
-                      </div>
-
-                      {/* عدد الصفقات */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">📊 عدد الصفقات:</span>
-                        <span className="text-white">{strategy.trades}</span>
-                      </div>
-
-                      {/* متوسط الربح لكل صفقة */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">📈 متوسط/صفقة:</span>
+                      </td>
+                      <td className="py-4">
                         <span className={`font-semibold ${
-                          strategy.avgTrade > 0 ? 'text-green-400' : 
-                          strategy.avgTrade < 0 ? 'text-red-400' : 'text-gray-400'
+                          strategy.accuracy >= 70 ? 'text-green-400' :
+                          strategy.accuracy >= 55 ? 'text-yellow-400' : 'text-red-400'
                         }`}>
-                          {strategy.avgTrade > 0 ? '+' : ''}{strategy.avgTrade}%
+                          {strategy.accuracy}%
                         </span>
-                      </div>
+                      </td>
+                      <td className="py-4 text-white">{strategy.totalTrades}</td>
+                      <td className="py-4 text-green-400">{strategy.successfulTrades}</td>
+                      <td className="py-4">
+                        <span className={`font-semibold ${
+                          strategy.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          ${strategy.profitLoss.toLocaleString()}
+                        </span>
+                      </td>
+                      <td className="py-4">
+                        <span className={`font-semibold ${
+                          strategy.roi >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {strategy.roi.toFixed(2)}%
+                        </span>
+                      </td>
+                      <td className="py-4 text-red-400">-{strategy.maxDrawdown.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                      {/* شريط الأداء */}
-                      <div className="mt-4">
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">الأداء العام</span>
-                          <span className="text-white">{strategy.accuracy}%</span>
-                        </div>
-                        <div className="w-full bg-gray-700 rounded-full h-2">
-                          <div 
-                            className={`h-2 rounded-full bg-gradient-to-r ${
-                              strategy.accuracy >= 70 ? 'from-green-400 to-green-600' :
-                              strategy.accuracy >= 60 ? 'from-yellow-400 to-yellow-600' :
-                              'from-red-400 to-red-600'
-                            }`}
-                            style={{ width: `${strategy.accuracy}%` }}
-                          />
-                        </div>
-                      </div>
+          {/* Performance Analysis */}
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
+            <h3 className="text-lg font-semibold text-white mb-4">تحليل الأداء</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-white font-semibold mb-3">الاستنتاجات الرئيسية</h4>
+                <div className="space-y-2 text-sm">
+                  {results.summary.bestStrategy.roi > 10 && (
+                    <div className="flex items-center space-x-2 space-x-reverse text-green-400">
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                      <span>أداء ممتاز للاستراتيجية المدمجة</span>
                     </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* مقارنة سريعة */}
-              <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-                <h3 className="text-xl font-semibold text-white mb-4">📊 مقارنة سريعة</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* الأفضل */}
-                  <div className="bg-green-500/20 rounded-lg p-4 border border-green-500/40">
-                    <div className="flex items-center space-x-2 space-x-reverse mb-2">
-                      <span className="text-2xl">🥇</span>
-                      <span className="text-green-400 font-semibold">الأفضل أداءً</span>
+                  )}
+                  
+                  {results.summary.averageROI > 5 ? (
+                    <div className="flex items-center space-x-2 space-x-reverse text-green-400">
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                      <span>متوسط عوائد إيجابي لمعظم الاستراتيجيات</span>
                     </div>
-                    <div className="text-white font-semibold text-lg">{results.summary.best.name}</div>
-                    <div className="text-green-300">دقة {results.summary.best.accuracy}% | ربح {results.summary.best.profitLoss}%</div>
-                  </div>
-
-                  {/* الأسوأ */}
-                  <div className="bg-red-500/20 rounded-lg p-4 border border-red-500/40">
-                    <div className="flex items-center space-x-2 space-x-reverse mb-2">
-                      <span className="text-2xl">🥉</span>
-                      <span className="text-red-400 font-semibold">الأضعف أداءً</span>
+                  ) : (
+                    <div className="flex items-center space-x-2 space-x-reverse text-yellow-400">
+                      <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                      <span>أداء متقلب - يتطلب تحسين المعايير</span>
                     </div>
-                    <div className="text-white font-semibold text-lg">{results.summary.worst.name}</div>
-                    <div className="text-red-300">دقة {results.summary.worst.accuracy}% | ربح {results.summary.worst.profitLoss}%</div>
+                  )}
+                  
+                  <div className="flex items-center space-x-2 space-x-reverse text-blue-400">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                    <span>نشاط تداول مناسب خلال الفترة المحددة</span>
                   </div>
                 </div>
               </div>
 
-              {/* تحذير */}
-              <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-xl p-4">
-                <div className="flex items-start space-x-3 space-x-reverse">
-                  <span className="text-2xl">⚠️</span>
-                  <div>
-                    <div className="text-yellow-400 font-semibold mb-1">تحذير مهم:</div>
-                    <div className="text-yellow-200 text-sm">
-                      النتائج السابقة لا تضمن الأداء المستقبلي. هذا الاختبار للأغراض التعليمية فقط. 
-                      استشر مستشاراً مالياً قبل اتخاذ قرارات استثمارية.
-                    </div>
-                  </div>
+              <div>
+                <h4 className="text-white font-semibold mb-3">التوصيات</h4>
+                <div className="space-y-2 text-sm text-gray-300">
+                  <div>• استخدم الاستراتيجية المدمجة للحصول على أفضل النتائج</div>
+                  <div>• راقب مستويات وقف الخسارة بعناية</div>
+                  <div>• اختبر فترات زمنية أطول للحصول على نتائج أكثر دقة</div>
+                  <div>• تذكر أن النتائج التاريخية لا تضمن أداءً مستقبلياً</div>
                 </div>
               </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* تعليمات للمبتدئين */}
-      {!results && !isRunning && (
-        <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-          <h3 className="text-lg font-semibold text-white mb-4">❓ كيفية قراءة النتائج</h3>
-          <div className="space-y-3 text-gray-300">
-            <div className="flex items-start space-x-3 space-x-reverse">
-              <span className="text-green-400">🎯</span>
-              <div><strong>الدقة:</strong> نسبة التنبؤات الصحيحة (كلما زادت، كانت الاستراتيجية أفضل)</div>
-            </div>
-            <div className="flex items-start space-x-3 space-x-reverse">
-              <span className="text-blue-400">💰</span>
-              <div><strong>الربح/الخسارة:</strong> العائد المتوقع (الأرقام الموجبة تعني ربح)</div>
-            </div>
-            <div className="flex items-start space-x-3 space-x-reverse">
-              <span className="text-purple-400">✅</span>
-              <div><strong>معدل النجاح:</strong> نسبة الصفقات الرابحة من إجمالي الصفقات</div>
-            </div>
-            <div className="flex items-start space-x-3 space-x-reverse">
-              <span className="text-orange-400">📊</span>
-              <div><strong>عدد الصفقات:</strong> إجمالي الصفقات المتوقعة خلال فترة الاختبار</div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Disclaimer */}
+      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+        <div className="flex items-start space-x-3 space-x-reverse">
+          <ExclamationTriangleIcon className="w-6 h-6 text-yellow-400 mt-1" />
+          <div>
+            <div className="text-yellow-400 font-semibold mb-1">تنبيه مهم</div>
+            <div className="text-yellow-300 text-sm">
+              هذه محاكاة تعتمد على بيانات تاريخية. الأداء السابق لا يضمن النتائج المستقبلية. 
+              استخدم هذه النتائج كدليل إرشادي فقط وليس كنصيحة استثمارية مباشرة.
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,3 +1,4 @@
+import React from 'react';
 import { ChartBarIcon, ClockIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 
 export const PriceCard = ({ loading, currentPrice, lastUpdate }) => {
