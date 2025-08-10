@@ -1,533 +1,421 @@
-// components/Dashboard/InvestmentTab.js
 import React, { useState, useEffect } from 'react';
 import { 
-  ArrowTrendingUpIcon,  // تم التصحيح من TrendingUpIcon
-  ClockIcon,
   BanknotesIcon,
+  ArrowTrendingUpIcon,
+  ClockIcon,
   ChartBarIcon,
-  PlusIcon,
-  EyeIcon,
   CalendarIcon,
-  ArrowTrendingDownIcon,
-  CheckIcon,
-  XMarkIcon,
-  CurrencyDollarIcon
+  CurrencyDollarIcon,
+  ScaleIcon,
+  TrophyIcon
 } from '@heroicons/react/24/outline';
 
 export const InvestmentTab = ({ selectedSymbol, currentPrice, analysisData }) => {
-  const [investments, setInvestments] = useState([]);
-  const [availableCapital, setAvailableCapital] = useState(0);
-  const [showNewInvestment, setShowNewInvestment] = useState(false);
-  const [newInvestment, setNewInvestment] = useState({
-    amount: '',
-    strategy: 'DCA',
-    duration: '12',
-    frequency: 'monthly'
+  const [investmentPlan, setInvestmentPlan] = useState({
+    strategy: 'dca', // Dollar Cost Averaging
+    amount: 1000,
+    frequency: 'weekly',
+    duration: 12, // months
+    riskLevel: 'medium'
   });
-  const [notification, setNotification] = useState(null);
 
-  // Load data from localStorage and portfolio allocation
+  const [projections, setProjections] = useState(null);
+  const [historicalData, setHistoricalData] = useState([]);
+
+  // Helper function for recommendation text
+  const getRecommendationText = (recommendation) => {
+    const texts = {
+      'BUY': 'شراء',
+      'STRONG_BUY': 'شراء قوي',
+      'WEAK_BUY': 'شراء ضعيف',
+      'SELL': 'بيع',
+      'STRONG_SELL': 'بيع قوي',
+      'WEAK_SELL': 'بيع ضعيف',
+      'HOLD': 'انتظار',
+      'NEUTRAL': 'محايد'
+    };
+    return texts[recommendation] || recommendation;
+  };
+
+  // Calculate investment projections
   useEffect(() => {
-    const savedInvestments = localStorage.getItem('long_term_investments');
-    const portfolioAllocations = localStorage.getItem('portfolio_allocations');
+    calculateProjections();
+  }, [investmentPlan, selectedSymbol]);
+
+  const calculateProjections = () => {
+    const { amount, frequency, duration } = investmentPlan;
     
-    if (savedInvestments) {
-      try {
-        setInvestments(JSON.parse(savedInvestments));
-      } catch (e) {
-        console.error('خطأ في تحميل الاستثمارات:', e);
-      }
-    }
-
-    // Get available capital from portfolio allocation
-    if (portfolioAllocations) {
-      try {
-        const allocations = JSON.parse(portfolioAllocations);
-        const investmentAllocation = allocations.find(alloc => 
-          alloc.category.includes('استثمار') || alloc.category.includes('الاستثمار')
-        );
-        if (investmentAllocation) {
-          setAvailableCapital(investmentAllocation.allocated || 0);
-        }
-      } catch (e) {
-        console.error('خطأ في تحميل تخصيص الاستثمار:', e);
-        setAvailableCapital(50000); // Default fallback
-      }
-    } else {
-      setAvailableCapital(50000); // Default fallback
-    }
-  }, []);
-
-  // Save investments to localStorage
-  useEffect(() => {
-    localStorage.setItem('long_term_investments', JSON.stringify(investments));
-  }, [investments]);
-
-  // Update investment values based on current prices
-  useEffect(() => {
-    if (currentPrice) {
-      setInvestments(prev => prev.map(investment => {
-        if (investment.symbol === selectedSymbol) {
-          const currentValue = investment.totalShares * currentPrice;
-          const totalInvested = investment.purchases.reduce((sum, purchase) => sum + purchase.amount, 0);
-          const pnl = currentValue - totalInvested;
-          const pnlPercentage = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
-          
-          return {
-            ...investment,
-            currentPrice,
-            currentValue,
-            totalInvested,
-            pnl,
-            pnlPercentage
-          };
-        }
-        return investment;
-      }));
-    }
-  }, [currentPrice, selectedSymbol]);
-
-  // Create new investment
-  const createInvestment = () => {
-    const amount = parseFloat(newInvestment.amount);
-    
-    if (amount <= 0) {
-      showNotification('يرجى إدخال مبلغ صالح', 'error');
-      return;
-    }
-
-    if (amount > availableCapital) {
-      showNotification('المبلغ أكبر من رأس المال المتاح للاستثمار', 'error');
-      return;
-    }
-
-    if (!currentPrice) {
-      showNotification('لا يمكن إنشاء استثمار بدون سعر حالي', 'error');
-      return;
-    }
-
-    const shares = amount / currentPrice;
-    const investment = {
-      id: Date.now().toString(),
-      symbol: selectedSymbol,
-      strategy: newInvestment.strategy,
-      duration: parseInt(newInvestment.duration),
-      frequency: newInvestment.frequency,
-      startDate: new Date().toISOString(),
-      endDate: new Date(Date.now() + parseInt(newInvestment.duration) * 30 * 24 * 60 * 60 * 1000).toISOString(),
-      initialAmount: amount,
-      totalShares: shares,
-      averagePrice: currentPrice,
-      currentPrice,
-      currentValue: amount,
-      totalInvested: amount,
-      pnl: 0,
-      pnlPercentage: 0,
-      isActive: true,
-      purchases: [{
-        date: new Date().toISOString(),
-        amount: amount,
-        price: currentPrice,
-        shares: shares,
-        type: 'initial'
-      }],
-      nextPurchaseDate: getNextPurchaseDate(newInvestment.frequency)
+    const frequencyMultiplier = {
+      'daily': 365,
+      'weekly': 52,
+      'monthly': 12
     };
 
-    setInvestments(prev => [investment, ...prev]);
-    setAvailableCapital(prev => prev - amount);
-    setShowNewInvestment(false);
-    setNewInvestment({ amount: '', strategy: 'DCA', duration: '12', frequency: 'monthly' });
+    const periodsPerYear = frequencyMultiplier[frequency];
+    const totalPeriods = (duration / 12) * periodsPerYear;
+    const amountPerPeriod = amount / periodsPerYear;
+
+    // Conservative projections based on crypto market
+    const scenarios = {
+      conservative: { return: 0.08, volatility: 0.3 },
+      moderate: { return: 0.15, volatility: 0.5 },
+      aggressive: { return: 0.25, volatility: 0.8 }
+    };
+
+    const results = {};
     
-    showNotification(`تم إنشاء استثمار في ${selectedSymbol} بنجاح!`, 'success');
+    Object.entries(scenarios).forEach(([scenario, params]) => {
+      const expectedReturn = params.return;
+      const finalValue = amountPerPeriod * totalPeriods * (1 + expectedReturn);
+      const totalInvested = amountPerPeriod * totalPeriods;
+      const profit = finalValue - totalInvested;
+      const roi = (profit / totalInvested) * 100;
+
+      results[scenario] = {
+        finalValue,
+        totalInvested,
+        profit,
+        roi,
+        monthlyContribution: amountPerPeriod * (periodsPerYear / 12)
+      };
+    });
+
+    setProjections(results);
   };
 
-  // Calculate next purchase date based on frequency
-  const getNextPurchaseDate = (frequency) => {
-    const now = new Date();
-    switch (frequency) {
-      case 'weekly':
-        return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      case 'monthly':
-        return new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()).toISOString();
-      case 'quarterly':
-        return new Date(now.getFullYear(), now.getMonth() + 3, now.getDate()).toISOString();
-      default:
-        return new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const strategies = [
+    {
+      id: 'dca',
+      name: 'متوسط التكلفة الدولارية (DCA)',
+      description: 'استثمار مبلغ ثابت بانتظام بغض النظر عن السعر',
+      pros: ['يقلل مخاطر التوقيت', 'مناسب للمبتدئين', 'يقلل التقلبات'],
+      cons: ['قد يفوت الفرص الكبيرة', 'عوائد أقل في الأسواق الصاعدة']
+    },
+    {
+      id: 'value',
+      name: 'الاستثمار في القيمة',
+      description: 'شراء عند انخفاض الأسعار عن القيمة العادلة',
+      pros: ['عوائد أعلى محتملة', 'يستفيد من تقلبات السوق'],
+      cons: ['يتطلب خبرة أكبر', 'صعوبة تحديد القيمة العادلة']
+    },
+    {
+      id: 'momentum',
+      name: 'استثمار الزخم',
+      description: 'شراء الأصول التي تظهر اتجاهاً صاعداً قوياً',
+      pros: ['يستفيد من الاتجاهات القوية', 'عوائد سريعة محتملة'],
+      cons: ['مخاطر عالية', 'تقلبات كبيرة']
     }
-  };
+  ];
 
-  // Execute DCA purchase
-  const executeDCAPurchase = (investmentId, amount) => {
-    if (!currentPrice) return;
+  const frequencies = [
+    { value: 'daily', label: 'يومي', description: 'استثمار يومي صغير' },
+    { value: 'weekly', label: 'أسبوعي', description: 'استثمار أسبوعي منتظم' },
+    { value: 'monthly', label: 'شهري', description: 'استثمار شهري كبير' }
+  ];
 
-    const shares = amount / currentPrice;
-    
-    setInvestments(prev => prev.map(investment => {
-      if (investment.id === investmentId) {
-        const newTotalShares = investment.totalShares + shares;
-        const newTotalInvested = investment.totalInvested + amount;
-        const newAveragePrice = newTotalInvested / newTotalShares;
-        
-        return {
-          ...investment,
-          totalShares: newTotalShares,
-          averagePrice: newAveragePrice,
-          totalInvested: newTotalInvested,
-          purchases: [...investment.purchases, {
-            date: new Date().toISOString(),
-            amount,
-            price: currentPrice,
-            shares,
-            type: 'dca'
-          }],
-          nextPurchaseDate: getNextPurchaseDate(investment.frequency)
-        };
-      }
-      return investment;
-    }));
-
-    setAvailableCapital(prev => prev - amount);
-    showNotification(`تم تنفيذ شراء DCA بقيمة ${amount}`, 'success');
-  };
-
-  // Show notification
-  const showNotification = (message, type = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
-
-  // Calculate total portfolio value
-  const totalInvestmentValue = investments.reduce((sum, inv) => sum + (inv.currentValue || 0), 0);
-  const totalInvested = investments.reduce((sum, inv) => sum + (inv.totalInvested || 0), 0);
-  const totalPnL = totalInvestmentValue - totalInvested;
-  const totalPnLPercentage = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
+  const riskLevels = [
+    { value: 'low', label: 'منخفض', color: 'green', description: 'استثمار آمن ومستقر' },
+    { value: 'medium', label: 'متوسط', color: 'yellow', description: 'توازن بين المخاطر والعوائد' },
+    { value: 'high', label: 'عالي', color: 'red', description: 'مخاطر عالية، عوائد محتملة عالية' }
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Notification */}
-      {notification && (
-        <div className={`fixed top-4 right-4 z-50 rounded-lg p-4 border shadow-lg transition-all duration-300 ${
-          notification.type === 'success' ? 'bg-green-500/20 border-green-500/30 text-green-400' :
-          notification.type === 'error' ? 'bg-red-500/20 border-red-500/30 text-red-400' :
-          'bg-blue-500/20 border-blue-500/30 text-blue-400'
-        }`}>
-          <div className="flex items-center space-x-2 space-x-reverse">
-            {notification.type === 'success' && <CheckIcon className="w-5 h-5" />}
-            {notification.type === 'error' && <XMarkIcon className="w-5 h-5" />}
-            <span>{notification.message}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Investment Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <div className="flex items-center justify-between mb-4">
-            <BanknotesIcon className="w-8 h-8 text-green-400" />
-            <div className="text-green-400 text-sm">رأس المال المتاح</div>
-          </div>
-          <div className="text-2xl font-bold text-white">
-            ${availableCapital.toLocaleString()}
-          </div>
-          <div className="text-xs text-gray-400 mt-1">للاستثمار طويل المدى</div>
+      {/* Investment Plan Configuration */}
+      <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white">خطة الاستثمار طويل المدى</h2>
+          <BanknotesIcon className="w-6 h-6 text-green-400" />
         </div>
 
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <div className="flex items-center justify-between mb-4">
-            <ArrowTrendingUpIcon className="w-8 h-8 text-blue-400" />
-            <div className="text-blue-400 text-sm">إجمالي الاستثمارات</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Strategy Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-3">اختيار الاستراتيجية:</label>
+            <div className="space-y-2">
+              {strategies.map((strategy) => (
+                <button
+                  key={strategy.id}
+                  onClick={() => setInvestmentPlan(prev => ({ ...prev, strategy: strategy.id }))}
+                  className={`w-full text-left p-3 rounded-lg border transition-all ${
+                    investmentPlan.strategy === strategy.id
+                      ? 'bg-blue-500/20 border-blue-500/50 text-white'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+                  }`}
+                >
+                  <div className="font-semibold">{strategy.name}</div>
+                  <div className="text-xs text-gray-400 mt-1">{strategy.description}</div>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="text-2xl font-bold text-white">
-            ${totalInvestmentValue.toLocaleString()}
-          </div>
-          <div className="text-xs text-gray-400 mt-1">القيمة الحالية</div>
-        </div>
 
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <div className="flex items-center justify-between mb-4">
-            <CurrencyDollarIcon className="w-8 h-8 text-purple-400" />
-            <div className="text-purple-400 text-sm">إجمالي المستثمر</div>
-          </div>
-          <div className="text-2xl font-bold text-white">
-            ${totalInvested.toLocaleString()}
-          </div>
-          <div className="text-xs text-gray-400 mt-1">المبلغ المدفوع</div>
-        </div>
+          {/* Investment Parameters */}
+          <div className="space-y-4">
+            {/* Total Amount */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                إجمالي المبلغ المراد استثماره:
+              </label>
+              <input
+                type="number"
+                value={investmentPlan.amount}
+                onChange={(e) => setInvestmentPlan(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="1000"
+              />
+            </div>
 
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <div className="flex items-center justify-between mb-4">
-            <ArrowTrendingUpIcon className="w-8 h-8 text-yellow-400" />
-            <div className="text-yellow-400 text-sm">الربح/الخسارة</div>
-          </div>
-          <div className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {totalPnL >= 0 ? '+' : ''}${totalPnL.toFixed(2)}
-          </div>
-          <div className={`text-xs mt-1 ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {totalPnL >= 0 ? '+' : ''}{totalPnLPercentage.toFixed(2)}%
+            {/* Frequency */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">تكرار الاستثمار:</label>
+              <select
+                value={investmentPlan.frequency}
+                onChange={(e) => setInvestmentPlan(prev => ({ ...prev, frequency: e.target.value }))}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {frequencies.map((freq) => (
+                  <option key={freq.value} value={freq.value} className="bg-gray-800">
+                    {freq.label} - {freq.description}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Duration */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                مدة الاستثمار (بالأشهر):
+              </label>
+              <input
+                type="number"
+                value={investmentPlan.duration}
+                onChange={(e) => setInvestmentPlan(prev => ({ ...prev, duration: parseInt(e.target.value) || 1 }))}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                min="1"
+                max="120"
+              />
+            </div>
+
+            {/* Risk Level */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">مستوى المخاطر:</label>
+              <div className="grid grid-cols-3 gap-2">
+                {riskLevels.map((level) => (
+                  <button
+                    key={level.value}
+                    onClick={() => setInvestmentPlan(prev => ({ ...prev, riskLevel: level.value }))}
+                    className={`p-2 rounded-lg text-sm font-semibold transition-all ${
+                      investmentPlan.riskLevel === level.value
+                        ? `bg-${level.color}-500/20 border-${level.color}-500/50 text-${level.color}-400 border`
+                        : 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10'
+                    }`}
+                  >
+                    {level.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* AI Investment Recommendation */}
-      {analysisData?.ultimate_decision && (
+      {/* Investment Projections */}
+      {projections && (
         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <h3 className="text-lg font-semibold text-white mb-4">توصية الاستثمار الذكية</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <div className="flex items-center space-x-3 space-x-reverse mb-3">
-                <div className={`w-3 h-3 rounded-full ${
-                  analysisData.ultimate_decision.final_recommendation === 'BUY' ? 'bg-green-400' :
-                  analysisData.ultimate_decision.final_recommendation === 'SELL' ? 'bg-red-400' : 'bg-yellow-400'
-                }`}></div>
-                <span className="text-white font-semibold">
-                  توصية للاستثمار في {selectedSymbol}
-                </span>
-              </div>
-              <div className="text-gray-400 text-sm mb-2">
-                {analysisData.ultimate_decision.reasoning}
-              </div>
-              <div className="text-white">
-                مستوى الثقة: {analysisData.ultimate_decision.final_confidence}%
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-gray-400 text-sm">مناسب للاستثمار طويل المدى:</div>
-              <div className={`text-sm font-semibold ${
-                analysisData.ultimate_decision.final_confidence > 70 ? 'text-green-400' :
-                analysisData.ultimate_decision.final_confidence > 50 ? 'text-yellow-400' : 'text-red-400'
-              }`}>
-                {analysisData.ultimate_decision.final_confidence > 70 ? '✅ مناسب جداً' :
-                 analysisData.ultimate_decision.final_confidence > 50 ? '⚠️ مناسب مع حذر' : '❌ غير مناسب حالياً'}
-              </div>
-              <div className="text-xs text-gray-500">
-                الاستثمار طويل المدى يتطلب ثقة عالية (70%+)
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create New Investment */}
-      {showNewInvestment && (
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <h3 className="text-xl font-semibold text-white mb-6">إنشاء استثمار جديد - {selectedSymbol}</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">المبلغ الأولي ($)</label>
-                <input
-                  type="number"
-                  value={newInvestment.amount}
-                  onChange={(e) => setNewInvestment({...newInvestment, amount: e.target.value})}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none"
-                  placeholder="5000"
-                  min="100"
-                  max={availableCapital}
-                />
-                {currentPrice && newInvestment.amount && (
-                  <div className="text-sm text-gray-400 mt-1">
-                    الأسهم: {(parseFloat(newInvestment.amount) / currentPrice).toFixed(6)}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">استراتيجية الاستثمار</label>
-                <select
-                  value={newInvestment.strategy}
-                  onChange={(e) => setNewInvestment({...newInvestment, strategy: e.target.value})}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none"
-                >
-                  <option value="DCA" className="bg-slate-800">متوسط التكلفة (DCA)</option>
-                  <option value="LUMP_SUM" className="bg-slate-800">استثمار مبلغ مقطوع</option>
-                  <option value="VALUE_AVERAGING" className="bg-slate-800">متوسط القيمة</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">مدة الاستثمار (شهر)</label>
-                <select
-                  value={newInvestment.duration}
-                  onChange={(e) => setNewInvestment({...newInvestment, duration: e.target.value})}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none"
-                >
-                  <option value="6" className="bg-slate-800">6 أشهر</option>
-                  <option value="12" className="bg-slate-800">سنة واحدة</option>
-                  <option value="24" className="bg-slate-800">سنتان</option>
-                  <option value="36" className="bg-slate-800">3 سنوات</option>
-                  <option value="60" className="bg-slate-800">5 سنوات</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">تكرار الشراء (DCA)</label>
-                <select
-                  value={newInvestment.frequency}
-                  onChange={(e) => setNewInvestment({...newInvestment, frequency: e.target.value})}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none"
-                  disabled={newInvestment.strategy === 'LUMP_SUM'}
-                >
-                  <option value="weekly" className="bg-slate-800">أسبوعياً</option>
-                  <option value="monthly" className="bg-slate-800">شهرياً</option>
-                  <option value="quarterly" className="bg-slate-800">ربع سنوي</option>
-                </select>
-              </div>
-            </div>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-white">توقعات الاستثمار</h3>
+            <ChartBarIcon className="w-6 h-6 text-purple-400" />
           </div>
 
-          <div className="flex justify-end space-x-3 space-x-reverse mt-6">
-            <button
-              onClick={() => setShowNewInvestment(false)}
-              className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
-            >
-              إلغاء
-            </button>
-            <button
-              onClick={createInvestment}
-              disabled={!newInvestment.amount || parseFloat(newInvestment.amount) <= 0 || !currentPrice}
-              className="px-6 py-3 bg-green-500 hover:bg-green-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            >
-              إنشاء الاستثمار
-            </button>
-          </div>
-
-          {parseFloat(newInvestment.amount) > availableCapital && (
-            <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
-              المبلغ أكبر من رأس المال المتاح (${availableCapital.toLocaleString()})
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Investments List */}
-      <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-semibold text-white">الاستثمارات طويلة المدى</h3>
-          <button
-            onClick={() => setShowNewInvestment(!showNewInvestment)}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 space-x-reverse"
-          >
-            <PlusIcon className="w-5 h-5" />
-            <span>استثمار جديد</span>
-          </button>
-        </div>
-
-        {investments.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            <ArrowTrendingUpIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <p className="text-lg mb-2">لا توجد استثمارات حالياً</p>
-            <p className="text-sm">ابدأ استثمارك طويل المدى اليوم</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {investments.map((investment) => (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(projections).map(([scenario, data]) => (
               <div
-                key={investment.id}
-                className="bg-white/5 rounded-xl p-4 border border-white/10 hover:border-white/20 transition-all"
+                key={scenario}
+                className={`p-4 rounded-xl border ${
+                  scenario === 'conservative' ? 'bg-green-500/10 border-green-500/30' :
+                  scenario === 'moderate' ? 'bg-yellow-500/10 border-yellow-500/30' :
+                  'bg-red-500/10 border-red-500/30'
+                }`}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-4 space-x-reverse">
-                    <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
-                      <ArrowTrendingUpIcon className="w-6 h-6 text-blue-400" />
-                    </div>
+                <div className="text-center">
+                  <div className={`text-sm font-semibold mb-2 ${
+                    scenario === 'conservative' ? 'text-green-400' :
+                    scenario === 'moderate' ? 'text-yellow-400' :
+                    'text-red-400'
+                  }`}>
+                    {scenario === 'conservative' ? 'محافظ' :
+                     scenario === 'moderate' ? 'متوسط' : 'مجازف'}
+                  </div>
+                  
+                  <div className="space-y-2">
                     <div>
-                      <h4 className="text-white font-semibold text-lg">{investment.symbol}</h4>
-                      <p className="text-gray-400 text-sm">
-                        {investment.strategy} • {investment.frequency === 'monthly' ? 'شهرياً' : 
-                         investment.frequency === 'weekly' ? 'أسبوعياً' : 'ربع سنوي'}
-                      </p>
+                      <div className="text-xs text-gray-400">القيمة النهائية</div>
+                      <div className="text-lg font-bold text-white">
+                        ${data.finalValue.toLocaleString()}
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="text-right">
-                    <div className="text-white font-semibold text-lg">
-                      ${investment.currentValue?.toFixed(2) || '0.00'}
+                    
+                    <div>
+                      <div className="text-xs text-gray-400">إجمالي الاستثمار</div>
+                      <div className="text-sm text-gray-300">
+                        ${data.totalInvested.toLocaleString()}
+                      </div>
                     </div>
-                    <div className={`text-sm ${(investment.pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {(investment.pnl || 0) >= 0 ? '+' : ''}${(investment.pnl || 0).toFixed(2)} 
-                      ({(investment.pnlPercentage || 0).toFixed(2)}%)
+                    
+                    <div>
+                      <div className="text-xs text-gray-400">الربح المتوقع</div>
+                      <div className={`text-sm font-semibold ${
+                        data.profit >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        ${data.profit.toLocaleString()} ({data.roi.toFixed(1)}%)
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <div className="text-gray-400">إجمالي الأسهم</div>
-                    <div className="text-white font-semibold">
-                      {investment.totalShares?.toFixed(6)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400">متوسط السعر</div>
-                    <div className="text-white font-semibold">
-                      ${investment.averagePrice?.toFixed(2)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400">إجمالي المستثمر</div>
-                    <div className="text-white font-semibold">
-                      ${investment.totalInvested?.toFixed(2)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400">عدد الشراءات</div>
-                    <div className="text-white font-semibold">
-                      {investment.purchases?.length || 0}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between mt-4">
-                  <div className="flex items-center space-x-2 space-x-reverse text-sm text-gray-400">
-                    <CalendarIcon className="w-4 h-4" />
-                    <span>
-                      بدأ: {new Date(investment.startDate).toLocaleDateString('ar-SA')}
-                    </span>
-                  </div>
-                  
-                  <div className="flex space-x-2 space-x-reverse">
-                    {investment.strategy === 'DCA' && investment.isActive && (
-                      <button
-                        onClick={() => executeDCAPurchase(investment.id, investment.initialAmount / 10)}
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-colors"
-                      >
-                        شراء DCA
-                      </button>
-                    )}
-                    <button className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors flex items-center space-x-1 space-x-reverse">
-                      <EyeIcon className="w-4 h-4" />
-                      <span>التفاصيل</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Progress bar for investment duration */}
-                <div className="mt-4">
-                  <div className="flex justify-between text-xs text-gray-400 mb-1">
-                    <span>تقدم الاستثمار</span>
-                    <span>
-                      {Math.round(((Date.now() - new Date(investment.startDate).getTime()) / 
-                                  (new Date(investment.endDate).getTime() - new Date(investment.startDate).getTime())) * 100)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="h-2 rounded-full bg-blue-400"
-                      style={{ 
-                        width: `${Math.min(((Date.now() - new Date(investment.startDate).getTime()) / 
-                                           (new Date(investment.endDate).getTime() - new Date(investment.startDate).getTime())) * 100, 100)}%` 
-                      }}
-                    ></div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        )}
+
+          <div className="mt-6 p-4 bg-white/5 rounded-lg border border-white/10">
+            <div className="text-sm text-gray-300">
+              <div className="flex items-center justify-between mb-2">
+                <span>المساهمة الشهرية:</span>
+                <span className="text-white font-semibold">
+                  ${projections.moderate.monthlyContribution.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>مدة الاستثمار:</span>
+                <span className="text-white font-semibold">
+                  {investmentPlan.duration} شهر
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Current Analysis Integration */}
+      {analysisData && (
+        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-white">تحليل الاستثمار الحالي</h3>
+            <TrophyIcon className="w-6 h-6 text-yellow-400" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-white font-semibold mb-3">توصية الاستثمار طويل المدى</h4>
+              <div className={`p-4 rounded-lg ${
+                analysisData.ultimate_decision?.final_recommendation === 'BUY' ? 'bg-green-500/20' :
+                analysisData.ultimate_decision?.final_recommendation === 'SELL' ? 'bg-red-500/20' :
+                'bg-yellow-500/20'
+              }`}>
+                <div className="text-center">
+                  <div className={`text-lg font-bold mb-2 ${
+                    analysisData.ultimate_decision?.final_recommendation === 'BUY' ? 'text-green-400' :
+                    analysisData.ultimate_decision?.final_recommendation === 'SELL' ? 'text-red-400' :
+                    'text-yellow-400'
+                  }`}>
+                    {analysisData.ultimate_decision?.final_recommendation === 'BUY' ? 'مناسب للاستثمار' :
+                     analysisData.ultimate_decision?.final_recommendation === 'SELL' ? 'تجنب الاستثمار' :
+                     'انتظار فرصة أفضل'}
+                  </div>
+                  <div className="text-sm text-gray-300">
+                    مستوى الثقة: {analysisData.ultimate_decision?.final_confidence}%
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-white font-semibold mb-3">نقطة الدخول المقترحة</h4>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">السعر الحالي:</span>
+                  <span className="text-white font-semibold">${currentPrice?.toLocaleString()}</span>
+                </div>
+                
+                <div className="flex justify-between">
+                  <span className="text-gray-400">نقطة الدخول المثلى:</span>
+                  <span className="text-green-400 font-semibold">
+                    ${(currentPrice * 0.95)?.toFixed(2)} - ${(currentPrice * 1.05)?.toFixed(2)}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between">
+                  <span className="text-gray-400">الهدف طويل المدى:</span>
+                  <span className="text-blue-400 font-semibold">
+                    ${(currentPrice * 1.5)?.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Investment Tips */}
+      <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">نصائح الاستثمار طويل المدى</h3>
+          <ScaleIcon className="w-6 h-6 text-blue-400" />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div className="flex items-start space-x-3 space-x-reverse">
+              <div className="w-2 h-2 bg-green-400 rounded-full mt-2"></div>
+              <div>
+                <div className="text-white font-semibold text-sm">التنويع مهم</div>
+                <div className="text-gray-400 text-xs">لا تضع كل أموالك في عملة واحدة</div>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3 space-x-reverse">
+              <div className="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
+              <div>
+                <div className="text-white font-semibold text-sm">الصبر مفتاح النجاح</div>
+                <div className="text-gray-400 text-xs">الاستثمار طويل المدى يتطلب صبراً</div>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3 space-x-reverse">
+              <div className="w-2 h-2 bg-yellow-400 rounded-full mt-2"></div>
+              <div>
+                <div className="text-white font-semibold text-sm">مراجعة دورية</div>
+                <div className="text-gray-400 text-xs">راجع استراتيجيتك كل 3-6 أشهر</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-start space-x-3 space-x-reverse">
+              <div className="w-2 h-2 bg-purple-400 rounded-full mt-2"></div>
+              <div>
+                <div className="text-white font-semibold text-sm">إدارة المخاطر</div>
+                <div className="text-gray-400 text-xs">لا تستثمر أكثر مما تستطيع خسارته</div>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3 space-x-reverse">
+              <div className="w-2 h-2 bg-red-400 rounded-full mt-2"></div>
+              <div>
+                <div className="text-white font-semibold text-sm">تجنب القرارات العاطفية</div>
+                <div className="text-gray-400 text-xs">التزم بخطتك ولا تتأثر بالتقلبات</div>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3 space-x-reverse">
+              <div className="w-2 h-2 bg-orange-400 rounded-full mt-2"></div>
+              <div>
+                <div className="text-white font-semibold text-sm">التعلم المستمر</div>
+                <div className="text-gray-400 text-xs">ابق على اطلاع بتطورات السوق</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
