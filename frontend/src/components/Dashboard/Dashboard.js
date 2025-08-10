@@ -1,320 +1,380 @@
+// components/Dashboard/Dashboard.js - Fixed Infinite Loading Issue
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { 
-  ArrowPathIcon, 
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  CheckCircleIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  Cog6ToothIcon,
-  ChartBarIcon,
+  ChartBarIcon, 
+  WalletIcon,
   CpuChipIcon,
-  SparklesIcon,
-  ScaleIcon,
+  Cog6ToothIcon,
   ClockIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon
+  SparklesIcon
 } from '@heroicons/react/24/outline';
+import axios from 'axios';
 
-// Import separated components
-import { TabNavigation } from './TabNavigation';
+// Import existing components
 import { AnalysisTab } from './AnalysisTab';
-import { PortfolioTab } from './PortfolioTab';
-import { InvestmentTab } from './InvestmentTab';
-import { TradingTab } from './TradingTab';
-import { BacktestTab } from './BacktestTab';
-import { ComparisonTab } from './ComparisonTab';
+import { PriceCard } from './PriceCard';
+import { DecisionCard } from './DecisionCard';
+import { ControlCard } from './ControlCard';
 
-const Dashboard = (props) => {
-  // Protection from undefined props
-  const selectedSymbol = props?.selectedSymbol || 'BTCUSDT';
-  const analysisData = props?.analysisData || null;
-  const setAnalysisData = props?.setAnalysisData || (() => {});
+// Import new components
+import PortfolioTab from './PortfolioTab';
+import TradingTab from './TradingTab';
 
+const Dashboard = ({ selectedSymbol, analysisData, setAnalysisData, setIsLoading, apiHealth }) => {
+  const [activeTab, setActiveTab] = useState('analysis');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [currentPrice, setCurrentPrice] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [activeTab, setActiveTab] = useState('analysis');
-  
-  // Wyckoff analysis settings
-  const [wyckoffEnabled, setWyckoffEnabled] = useState(true);
-  const [wyckoffSettings, setWyckoffSettings] = useState({
-    sensitivity: 'medium',
-    multi_timeframe: true,
-    volume_analysis: true,
-    timeframes: ['1h', '4h', '1d']
-  });
-  const [showWyckoffSettings, setShowWyckoffSettings] = useState(false);
+  const [coinSuggestions, setCoinSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
-  // Display settings
-  const [viewMode, setViewMode] = useState('enhanced');
-  const [showCalculations, setShowCalculations] = useState(false);
+  const tabs = [
+    { 
+      id: 'analysis', 
+      name: 'التحليل الفني', 
+      icon: ChartBarIcon,
+      description: 'تحليل شامل للعملة المختارة'
+    },
+    { 
+      id: 'trading', 
+      name: 'التداول التلقائي', 
+      icon: CpuChipIcon,
+      description: 'تداول مدعوم بالذكاء الصناعي'
+    },
+    { 
+      id: 'portfolio', 
+      name: 'إدارة المحافظ', 
+      icon: WalletIcon,
+      description: 'إنشاء ومتابعة المحافظ'
+    },
+    { 
+      id: 'ai_suggestions', 
+      name: 'اقتراحات الذكي', 
+      icon: SparklesIcon,
+      description: 'توصيات العملات من الذكاء الصناعي'
+    },
+    { 
+      id: 'settings', 
+      name: 'الإعدادات', 
+      icon: Cog6ToothIcon,
+      description: 'إعدادات التداول والتحليل'
+    }
+  ];
 
-  // Update function with Wyckoff settings
-  const handleRefresh = async () => {
+  // Simple fetch analysis without infinite loop
+  const fetchAnalysis = async () => {
+    if (loading) return;
+    
     setLoading(true);
-    setError(null);
+    if (setIsLoading) setIsLoading(true);
     
     try {
-      console.log('🚀 Attempting analysis:', selectedSymbol);
-      
-      const params = new URLSearchParams();
-      params.append('interval', '1h'); // Add interval parameter
-      params.append('include_wyckoff', wyckoffEnabled.toString());
-      
-      if (wyckoffEnabled) {
-        params.append('multi_timeframe_wyckoff', wyckoffSettings.multi_timeframe.toString());
-        // Remove parameters that don't exist in the backend
-        // params.append('wyckoff_sensitivity', wyckoffSettings.sensitivity);
-        // params.append('wyckoff_timeframes', wyckoffSettings.timeframes.join(','));
-        // params.append('volume_analysis', wyckoffSettings.volume_analysis.toString());
+      const response = await axios.get(`/analysis/${selectedSymbol}`);
+      if (response.data) {
+        setAnalysisData(response.data.comprehensive_analysis || response.data);
+        setCurrentPrice(response.data.current_price);
+        setLastUpdate(new Date().toLocaleTimeString('ar-SA'));
       }
-      
-      console.log('📤 Sending request with params:', params.toString());
-      
-      const response = await fetch(`/ai/ultimate-analysis/${selectedSymbol}?${params.toString()}`);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`خطأ في الخادم: ${response.status} - ${errorText}`);
-      }
-      
-      const data = await response.json();
-      console.log('📥 Analysis received:', data);
-      
-      if (data.current_price) {
-        setCurrentPrice(data.current_price);
-      }
-      
-      setAnalysisData(data);
-      setLastUpdate(new Date().toLocaleTimeString('ar-SA'));
-      
     } catch (error) {
-      console.error('❌ Analysis error:', error);
-      setError(error.message);
+      console.error('خطأ في جلب التحليل:', error);
+      // Simple fallback
+      try {
+        const priceResponse = await axios.get(`/price/${selectedSymbol}`);
+        if (priceResponse.data) {
+          setCurrentPrice(priceResponse.data.price);
+          setLastUpdate(new Date().toLocaleTimeString('ar-SA'));
+        }
+      } catch (priceError) {
+        console.error('خطأ في جلب السعر:', priceError);
+      }
     } finally {
       setLoading(false);
+      if (setIsLoading) setIsLoading(false);
     }
   };
 
-  // Auto-refresh on symbol change
+  // Simple fetch suggestions
+  const fetchCoinSuggestions = async (riskLevel = 'MEDIUM') => {
+    if (suggestionsLoading) return;
+    
+    setSuggestionsLoading(true);
+    try {
+      const response = await axios.get(`/trading/suggest-coins?risk_level=${riskLevel}&count=10`);
+      setCoinSuggestions(response.data.suggestions || []);
+    } catch (error) {
+      console.error('خطأ في جلب اقتراحات العملات:', error);
+      setCoinSuggestions([]);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  };
+
+  // Only fetch on symbol change - NO dependency on activeTab
   useEffect(() => {
-    handleRefresh();
-  }, [selectedSymbol]);
+    if (selectedSymbol && activeTab === 'analysis') {
+      fetchAnalysis();
+    }
+  }, [selectedSymbol]); // Only selectedSymbol dependency
 
-  // Component definitions for tabs
-  const AnalysisTabContent = () => (
-    <AnalysisTab 
-      loading={loading}
-      currentPrice={currentPrice}
-      lastUpdate={lastUpdate}
-      analysisData={analysisData}
-      onRefresh={handleRefresh}
-      selectedSymbol={selectedSymbol}
-      wyckoffEnabled={wyckoffEnabled}
-      wyckoffSettings={wyckoffSettings}
-      viewMode={viewMode}
-      setViewMode={setViewMode}
-      showCalculations={showCalculations}
-      setShowCalculations={setShowCalculations}
-    />
+  const handleRefresh = () => {
+    if (activeTab === 'analysis') {
+      fetchAnalysis();
+    } else if (activeTab === 'ai_suggestions') {
+      fetchCoinSuggestions();
+    }
+  };
+
+  const TabNavigation = () => (
+    <div className="bg-white/10 backdrop-blur-md rounded-xl p-2 border border-white/20 mb-6">
+      <div className="flex space-x-1 space-x-reverse">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center space-x-2 space-x-reverse px-4 py-3 rounded-lg transition-all font-medium ${
+                activeTab === tab.id
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-white/10'
+              }`}
+              title={tab.description}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="hidden sm:block">{tab.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 
-  const PortfolioTabContent = () => (
-    <PortfolioTab 
-      selectedSymbol={selectedSymbol}
-      currentPrice={currentPrice}
-      analysisData={analysisData}
-    />
-  );
-
-  const InvestmentTabContent = () => (
-    <InvestmentTab 
-      selectedSymbol={selectedSymbol}
-      currentPrice={currentPrice}
-      analysisData={analysisData}
-    />
-  );
-
-  const TradingTabContent = () => (
-    <TradingTab 
-      selectedSymbol={selectedSymbol}
-      currentPrice={currentPrice}
-      analysisData={analysisData}
-    />
-  );
-
-  const BacktestTabContent = () => (
-    <BacktestTab 
-      selectedSymbol={selectedSymbol}
-      analysisData={analysisData}
-    />
-  );
-
-  const ComparisonTabContent = () => (
-    <ComparisonTab 
-      selectedSymbol={selectedSymbol}
-      analysisData={analysisData}
-    />
-  );
-
-  return (
+  const AISuggestionsTab = () => (
     <div className="space-y-6">
-      {/* Symbol Header with Loading State */}
-      <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3 space-x-reverse">
-            <div className="text-2xl font-bold text-white">{selectedSymbol}</div>
-            {loading && (
-              <ArrowPathIcon className="w-5 h-5 text-blue-400 animate-spin" />
-            )}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <SparklesIcon className="w-8 h-8 text-purple-400" />
+          <div>
+            <h2 className="text-2xl font-bold text-white">اقتراحات الذكاء الصناعي</h2>
+            <p className="text-gray-400">أفضل العملات للاستثمار حالياً</p>
           </div>
-          <div className="text-sm text-gray-400">
-            {loading ? 'جاري تحميل البيانات...' : `آخر تحديث: ${lastUpdate || 'لم يتم التحديث'}`}
-          </div>
+        </div>
+        
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <select
+            onChange={(e) => fetchCoinSuggestions(e.target.value)}
+            className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
+            defaultValue="MEDIUM"
+          >
+            <option value="LOW">مخاطر منخفضة</option>
+            <option value="MEDIUM">مخاطر متوسطة</option>
+            <option value="HIGH">مخاطر عالية</option>
+          </select>
+          
+          <button
+            onClick={() => fetchCoinSuggestions()}
+            disabled={suggestionsLoading}
+            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-4 py-2 rounded-lg font-semibold transition-all"
+          >
+            {suggestionsLoading ? 'جاري التحميل...' : 'تحديث'}
+          </button>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
-
-      {/* Wyckoff Settings Panel */}
-      {activeTab === 'analysis' && (
-        <div className="bg-white/5 backdrop-blur-md rounded-xl p-4 border border-white/10">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-3 space-x-reverse">
-              <Cog6ToothIcon className="w-5 h-5 text-purple-400" />
-              <span className="text-white font-semibold">إعدادات تحليل وايكوف</span>
-            </div>
-            <button
-              onClick={() => setShowWyckoffSettings(!showWyckoffSettings)}
-              className="text-gray-400 hover:text-white"
-            >
-              {showWyckoffSettings ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <span className="text-gray-300">تفعيل تحليل وايكوف</span>
-            <button
-              onClick={() => setWyckoffEnabled(!wyckoffEnabled)}
-              className={`relative inline-flex h-6 w-12 rounded-full transition-colors ${
-                wyckoffEnabled ? 'bg-blue-600' : 'bg-gray-600'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform mt-1 ${
-                  wyckoffEnabled ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          {showWyckoffSettings && wyckoffEnabled && (
-            <div className="mt-4 space-y-3 p-3 bg-white/5 rounded-lg border border-white/10">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-300 text-sm">تحليل متعدد الإطارات الزمنية</span>
-                <button
-                  onClick={() => setWyckoffSettings(prev => ({
-                    ...prev,
-                    multi_timeframe: !prev.multi_timeframe
-                  }))}
-                  className={`relative inline-flex h-5 w-10 rounded-full transition-colors ${
-                    wyckoffSettings.multi_timeframe ? 'bg-blue-600' : 'bg-gray-600'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform mt-1 ${
-                      wyckoffSettings.multi_timeframe ? 'translate-x-5' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-gray-300 text-sm">تحليل الحجم</span>
-                <button
-                  onClick={() => setWyckoffSettings(prev => ({
-                    ...prev,
-                    volume_analysis: !prev.volume_analysis
-                  }))}
-                  className={`relative inline-flex h-5 w-10 rounded-full transition-colors ${
-                    wyckoffSettings.volume_analysis ? 'bg-blue-600' : 'bg-gray-600'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform mt-1 ${
-                      wyckoffSettings.volume_analysis ? 'translate-x-5' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
+      {suggestionsLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20 animate-pulse">
+              <div className="space-y-3">
+                <div className="h-6 bg-white/20 rounded"></div>
+                <div className="h-4 bg-white/10 rounded"></div>
+                <div className="h-4 bg-white/10 rounded w-2/3"></div>
               </div>
             </div>
-          )}
+          ))}
         </div>
-      )}
-
-      {/* Refresh Button - only shows in analysis tab */}
-      {activeTab === 'analysis' && (
-        <div className="flex justify-center">
+      ) : coinSuggestions.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {coinSuggestions.map((suggestion, index) => (
+            <motion.div
+              key={suggestion.symbol}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20 hover:border-white/30 transition-all"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-white">{suggestion.symbol}</h3>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  suggestion.recommendation === 'BUY' ? 'bg-green-500/20 text-green-400' :
+                  suggestion.recommendation === 'SELL' ? 'bg-red-500/20 text-red-400' :
+                  'bg-yellow-500/20 text-yellow-400'
+                }`}>
+                  {suggestion.recommendation === 'BUY' ? 'شراء' :
+                   suggestion.recommendation === 'SELL' ? 'بيع' : 'انتظار'}
+                </span>
+              </div>
+              
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-sm">السعر الحالي:</span>
+                  <span className="text-white font-medium">${suggestion.current_price?.toFixed(4)}</span>
+                </div>
+                
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-sm">مستوى الثقة:</span>
+                  <span className="text-blue-400 font-medium">{suggestion.confidence?.toFixed(1)}%</span>
+                </div>
+                
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-sm">النتيجة:</span>
+                  <span className="text-purple-400 font-medium">{suggestion.score?.toFixed(1)}</span>
+                </div>
+              </div>
+              
+              <div className="bg-white/5 rounded-lg p-3">
+                <div className="text-xs text-gray-400 mb-1">التحليل:</div>
+                <div className="text-sm text-gray-300">{suggestion.reasoning?.substring(0, 100)}...</div>
+              </div>
+              
+              <div className="mt-3 text-xs text-gray-500">
+                المصدر: {suggestion.analysis_source}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <SparklesIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">لا توجد اقتراحات</h3>
+          <p className="text-gray-400 mb-4">اضغط على تحديث للحصول على اقتراحات جديدة</p>
           <button
-            onClick={handleRefresh}
-            disabled={loading}
-            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 text-white px-8 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 space-x-reverse"
+            onClick={() => fetchCoinSuggestions()}
+            className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg"
           >
-            <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-            <span>{loading ? 'جاري التحليل...' : 'تحديث التحليل'}</span>
+            جلب الاقتراحات
           </button>
         </div>
       )}
+    </div>
+  );
 
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center space-x-3 space-x-reverse">
-          <ExclamationTriangleIcon className="w-6 h-6 text-red-400" />
-          <div>
-            <div className="text-red-400 font-semibold">خطأ في التحليل</div>
-            <div className="text-red-300 text-sm">{error}</div>
-            <button 
-              onClick={handleRefresh}
-              className="mt-2 text-red-400 hover:text-red-300 text-sm underline"
-              disabled={loading}
-            >
-              إعادة المحاولة
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Tab Content */}
-      {activeTab === 'analysis' && <AnalysisTabContent />}
-      {activeTab === 'portfolio' && <PortfolioTabContent />}
-      {activeTab === 'investment' && <InvestmentTabContent />}
-      {activeTab === 'trading' && <TradingTabContent />}
-      {activeTab === 'backtest' && <BacktestTabContent />}
-      {activeTab === 'comparison' && <ComparisonTabContent />}
-
-      {/* Diagnostic Information */}
-      <div className="bg-gray-800/50 rounded-lg p-4 text-xs">
-        <div className="text-gray-400 mb-2 flex items-center space-x-2 space-x-reverse">
-          <span>🔧 معلومات التشخيص:</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-gray-300">
-          <div>الرمز: <span className="text-white">{selectedSymbol}</span></div>
-          <div>حالة التحميل: <span className={loading ? 'text-yellow-400' : 'text-green-400'}>
-            {loading ? 'جاري التحميل' : 'مكتمل'}
-          </span></div>
-          <div>البيانات: <span className={analysisData ? 'text-green-400' : 'text-red-400'}>
-            {analysisData ? 'متوفرة' : 'غير متوفرة'}
-          </span></div>
-          <div>وايكوف: <span className={wyckoffEnabled ? 'text-green-400' : 'text-gray-500'}>
-            {wyckoffEnabled ? 'مفعل' : 'معطل'}
-          </span></div>
-          <div>التبويب النشط: <span className="text-white">{activeTab}</span></div>
-          <div>آخر تحديث: <span className="text-white">{lastUpdate || 'لم يتم'}</span></div>
+  const SettingsTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center space-x-3 space-x-reverse mb-6">
+        <Cog6ToothIcon className="w-8 h-8 text-gray-400" />
+        <div>
+          <h2 className="text-2xl font-bold text-white">إعدادات النظام</h2>
+          <p className="text-gray-400">إعدادات التداول والتحليل والإشعارات</p>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Trading Settings */}
+        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+          <h3 className="text-lg font-semibold text-white mb-4">إعدادات التداول</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">استراتيجية التداول الافتراضية</label>
+              <select className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-blue-400 focus:outline-none">
+                <option value="AI_HYBRID">ذكاء صناعي هجين</option>
+                <option value="TECHNICAL">تحليل فني</option>
+                <option value="SIMPLE_AI">ذكاء صناعي بسيط</option>
+                <option value="ADVANCED_AI">ذكاء صناعي متقدم</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">مستوى المخاطرة الافتراضي</label>
+              <select className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-blue-400 focus:outline-none">
+                <option value="LOW">منخفض</option>
+                <option value="MEDIUM">متوسط</option>
+                <option value="HIGH">عالي</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* API Status */}
+        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+          <h3 className="text-lg font-semibold text-white mb-4">حالة الاتصالات</h3>
+          
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-300">قاعدة البيانات</span>
+              <span className={`px-2 py-1 rounded text-xs ${
+                apiHealth?.database === 'connected' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+              }`}>
+                {apiHealth?.database === 'connected' ? 'متصل' : 'غير متصل'}
+              </span>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <span className="text-gray-300">Binance API</span>
+              <span className={`px-2 py-1 rounded text-xs ${
+                apiHealth?.binance_api === 'connected' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+              }`}>
+                {apiHealth?.binance_api === 'connected' ? 'متصل' : 'غير متصل'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'analysis':
+        return (
+          <AnalysisTab
+            loading={loading}
+            currentPrice={currentPrice}
+            lastUpdate={lastUpdate}
+            analysisData={analysisData}
+            onRefresh={handleRefresh}
+          />
+        );
+      
+      case 'trading':
+        return <TradingTab selectedSymbol={selectedSymbol} />;
+      
+      case 'portfolio':
+        return <PortfolioTab selectedSymbol={selectedSymbol} />;
+      
+      case 'ai_suggestions':
+        return <AISuggestionsTab />;
+      
+      case 'settings':
+        return <SettingsTab />;
+      
+      default:
+        return (
+          <AnalysisTab
+            loading={loading}
+            currentPrice={currentPrice}
+            lastUpdate={lastUpdate}
+            analysisData={analysisData}
+            onRefresh={handleRefresh}
+          />
+        );
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <TabNavigation />
+      
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        {renderTabContent()}
+      </motion.div>
     </div>
   );
 };

@@ -1,312 +1,418 @@
+// components/Dashboard/PortfolioTab.js
 import React, { useState, useEffect } from 'react';
 import { 
   WalletIcon, 
-  BanknotesIcon, 
-  ChartPieIcon, 
-  ArrowTrendingUpIcon,
-  PlusIcon,
-  EyeIcon,
-  PlayIcon,
-  PauseIcon,
+  PlusIcon, 
   TrashIcon,
-  CogIcon,
-  CheckIcon,
-  XMarkIcon,
-  InformationCircleIcon
+  ChartBarIcon,
+  CurrencyDollarIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
+  ClockIcon,
+  ArrowPathIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  PlayIcon,
+  PauseIcon
 } from '@heroicons/react/24/outline';
+import axios from 'axios';
 
-export const PortfolioTab = ({ selectedSymbol, currentPrice }) => {
+const PortfolioTab = ({ selectedSymbol }) => {
   const [portfolios, setPortfolios] = useState([]);
-  const [totalBalance, setTotalBalance] = useState(0);
-  const [isSetupMode, setIsSetupMode] = useState(true);
-  const [setupAmount, setSetupAmount] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newPortfolio, setNewPortfolio] = useState({
+    user_id: 'user_001', // يمكن جعلها dynamic لاحقاً
+    symbol: selectedSymbol || 'BTCUSDT',
+    initial_balance: 1000,
+    risk_level: 'MEDIUM'
+  });
   const [selectedPortfolio, setSelectedPortfolio] = useState(null);
-  const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
-  const [newPortfolioAmount, setNewPortfolioAmount] = useState('1000');
-  const [notification, setNotification] = useState(null);
+  const [performanceData, setPerformanceData] = useState(null);
 
-  // Load portfolios from localStorage on mount
   useEffect(() => {
-    const savedPortfolios = localStorage.getItem('trading_portfolios');
-    const savedBalance = localStorage.getItem('trading_balance');
-    const isSetupComplete = localStorage.getItem('portfolio_setup_complete');
-    
-    if (savedPortfolios) {
-      try {
-        setPortfolios(JSON.parse(savedPortfolios));
-      } catch (e) {
-        console.error('خطأ في تحميل المحافظ:', e);
-      }
-    }
-    
-    if (savedBalance) {
-      setTotalBalance(parseFloat(savedBalance));
-    }
-
-    if (isSetupComplete === 'true' && savedBalance) {
-      setIsSetupMode(false);
-    }
+    fetchPortfolios();
   }, []);
 
-  // Save to localStorage whenever portfolios or balance changes
   useEffect(() => {
-    if (!isSetupMode) {
-      localStorage.setItem('trading_portfolios', JSON.stringify(portfolios));
-      localStorage.setItem('trading_balance', totalBalance.toString());
-    }
-  }, [portfolios, totalBalance, isSetupMode]);
+    setNewPortfolio(prev => ({ ...prev, symbol: selectedSymbol || 'BTCUSDT' }));
+  }, [selectedSymbol]);
 
-  // Setup initial investment amount
-  const completeSetup = () => {
-    const amount = parseFloat(setupAmount);
-    if (amount && amount > 0) {
-      setTotalBalance(amount);
-      setIsSetupMode(false);
-      localStorage.setItem('trading_balance', amount.toString());
-      localStorage.setItem('portfolio_setup_complete', 'true');
-      showNotification('تم إعداد محفظتك بنجاح!', 'success');
+  const fetchPortfolios = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get('/trading/portfolios/user_001');
+      setPortfolios(response.data.portfolios || []);
+    } catch (error) {
+      console.error('خطأ في جلب المحافظ:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const showNotification = (message, type = 'info') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
-
-  // Create new portfolio
-  const createPortfolio = () => {
-    const amount = parseFloat(newPortfolioAmount);
-    if (amount && amount > 0 && amount <= totalBalance) {
-      const newPortfolio = {
-        id: Date.now().toString(),
-        name: `محفظة ${selectedSymbol}`,
-        symbol: selectedSymbol,
-        initialAmount: amount,
-        currentValue: amount,
-        position: 0,
-        entryPrice: 0,
-        pnl: 0,
-        pnlPercentage: 0,
-        status: 'active',
-        createdAt: new Date().toISOString()
-      };
-      
-      setPortfolios(prev => [...prev, newPortfolio]);
-      setTotalBalance(prev => prev - amount);
-      setShowCreatePortfolio(false);
-      setNewPortfolioAmount('1000');
-      showNotification('تم إنشاء المحفظة بنجاح!', 'success');
+  const createPortfolio = async () => {
+    try {
+      const response = await axios.post('/trading/portfolio/create', newPortfolio);
+      setShowCreateModal(false);
+      setNewPortfolio({
+        user_id: 'user_001',
+        symbol: selectedSymbol || 'BTCUSDT',
+        initial_balance: 1000,
+        risk_level: 'MEDIUM'
+      });
+      fetchPortfolios();
+    } catch (error) {
+      console.error('خطأ في إنشاء المحفظة:', error);
     }
   };
 
-  if (isSetupMode) {
+  const deletePortfolio = async (portfolioId) => {
+    if (window.confirm('هل أنت متأكد من حذف هذه المحفظة؟')) {
+      try {
+        await axios.delete(`/trading/portfolio/${portfolioId}`);
+        fetchPortfolios();
+      } catch (error) {
+        console.error('خطأ في حذف المحفظة:', error);
+      }
+    }
+  };
+
+  const getPerformanceData = async (portfolioId) => {
+    try {
+      const response = await axios.get(`/trading/portfolio/performance/${portfolioId}`);
+      setPerformanceData(response.data);
+      setSelectedPortfolio(portfolioId);
+    } catch (error) {
+      console.error('خطأ في جلب بيانات الأداء:', error);
+    }
+  };
+
+  const executeAutoTrade = async (portfolioId) => {
+    try {
+      const response = await axios.post(`/trading/portfolio/auto-trade/${portfolioId}`);
+      console.log('نتيجة التداول التلقائي:', response.data);
+      fetchPortfolios(); // تحديث المحافظ
+    } catch (error) {
+      console.error('خطأ في التداول التلقائي:', error);
+    }
+  };
+
+  const getRiskLevelColor = (level) => {
+    switch (level) {
+      case 'LOW': return 'text-green-400 bg-green-500/20';
+      case 'HIGH': return 'text-red-400 bg-red-500/20';
+      default: return 'text-yellow-400 bg-yellow-500/20';
+    }
+  };
+
+  const getRiskLevelText = (level) => {
+    switch (level) {
+      case 'LOW': return 'منخفض';
+      case 'HIGH': return 'عالي';
+      default: return 'متوسط';
+    }
+  };
+
+  const getReturnColor = (returnValue) => {
+    if (returnValue > 0) return 'text-green-400';
+    if (returnValue < 0) return 'text-red-400';
+    return 'text-gray-400';
+  };
+
+  const PortfolioCard = ({ portfolio }) => {
+    const performance = portfolio.performance;
+    
     return (
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 text-center">
-          <WalletIcon className="w-16 h-16 text-blue-400 mx-auto mb-6" />
-          <h2 className="text-2xl font-bold text-white mb-4">إعداد محفظة التداول</h2>
-          <p className="text-gray-300 mb-6">
-            مرحباً! دعنا نبدأ بإعداد محفظة التداول الخاصة بك. كم المبلغ الذي تريد استثماره؟
-          </p>
+      <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 hover:border-white/30 transition-all">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3 space-x-reverse">
+            <WalletIcon className="w-6 h-6 text-blue-400" />
+            <div>
+              <h3 className="text-lg font-semibold text-white">{portfolio.symbol}</h3>
+              <span className={`px-2 py-1 rounded text-xs ${getRiskLevelColor(portfolio.risk_level)}`}>
+                {getRiskLevelText(portfolio.risk_level)}
+              </span>
+            </div>
+          </div>
           
-          <div className="space-y-4">
-            <input
-              type="number"
-              value={setupAmount}
-              onChange={(e) => setSetupAmount(e.target.value)}
-              placeholder="أدخل المبلغ بالدولار"
-              className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white text-center text-xl font-semibold placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="flex items-center space-x-2 space-x-reverse">
+            <button
+              onClick={() => getPerformanceData(portfolio.id)}
+              className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-colors"
+              title="عرض التفاصيل"
+            >
+              <ChartBarIcon className="w-5 h-5 text-blue-400" />
+            </button>
             
-            <div className="flex justify-center space-x-2 space-x-reverse">
-              {[1000, 5000, 10000, 50000].map(amount => (
-                <button
-                  key={amount}
-                  onClick={() => setSetupAmount(amount.toString())}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
-                >
-                  ${amount.toLocaleString()}
-                </button>
-              ))}
+            <button
+              onClick={() => executeAutoTrade(portfolio.id)}
+              className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg transition-colors"
+              title="تنفيذ تداول تلقائي"
+            >
+              <PlayIcon className="w-5 h-5 text-green-400" />
+            </button>
+            
+            <button
+              onClick={() => deletePortfolio(portfolio.id)}
+              className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors"
+              title="حذف المحفظة"
+            >
+              <TrashIcon className="w-5 h-5 text-red-400" />
+            </button>
+          </div>
+        </div>
+
+        {performance && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-sm text-gray-400">الرصيد الحالي</div>
+                <div className="text-xl font-bold text-white">
+                  ${performance.current_balance?.toLocaleString()}
+                </div>
+              </div>
+              
+              <div>
+                <div className="text-sm text-gray-400">إجمالي القيمة</div>
+                <div className="text-xl font-bold text-white">
+                  ${performance.total_portfolio_value?.toLocaleString()}
+                </div>
+              </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-sm text-gray-400">العائد</div>
+                <div className={`text-lg font-semibold ${getReturnColor(performance.total_return)}`}>
+                  {performance.return_percentage?.toFixed(2)}%
+                </div>
+              </div>
+              
+              <div>
+                <div className="text-sm text-gray-400">معدل النجاح</div>
+                <div className="text-lg font-semibold text-blue-400">
+                  {performance.success_rate?.toFixed(1)}%
+                </div>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-400 pt-2 border-t border-white/10">
+              إجمالي الصفقات: {performance.total_trades} | 
+              الصفقات الناجحة: {performance.successful_trades}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const CreatePortfolioModal = () => {
+    if (!showCreateModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md mx-4 border border-white/20">
+          <h2 className="text-xl font-bold text-white mb-4">إنشاء محفظة جديدة</h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">العملة</label>
+              <select
+                value={newPortfolio.symbol}
+                onChange={(e) => setNewPortfolio(prev => ({ ...prev, symbol: e.target.value }))}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
+              >
+                <option value="BTCUSDT">Bitcoin (BTC)</option>
+                <option value="ETHUSDT">Ethereum (ETH)</option>
+                <option value="BNBUSDT">Binance Coin (BNB)</option>
+                <option value="SOLUSDT">Solana (SOL)</option>
+                <option value="ADAUSDT">Cardano (ADA)</option>
+                <option value="XRPUSDT">Ripple (XRP)</option>
+                <option value="DOGEUSDT">Dogecoin (DOGE)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">الرصيد الأولي ($)</label>
+              <input
+                type="number"
+                value={newPortfolio.initial_balance}
+                onChange={(e) => setNewPortfolio(prev => ({ ...prev, initial_balance: parseFloat(e.target.value) }))}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
+                min="100"
+                step="100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">مستوى المخاطرة</label>
+              <select
+                value={newPortfolio.risk_level}
+                onChange={(e) => setNewPortfolio(prev => ({ ...prev, risk_level: e.target.value }))}
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
+              >
+                <option value="LOW">منخفض - استثمار آمن</option>
+                <option value="MEDIUM">متوسط - متوازن</option>
+                <option value="HIGH">عالي - مخاطر عالية</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 space-x-reverse mt-6">
             <button
-              onClick={completeSetup}
-              disabled={!setupAmount || parseFloat(setupAmount) <= 0}
-              className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed text-white py-4 rounded-xl font-semibold text-lg transition-all duration-300"
+              onClick={createPortfolio}
+              className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white py-2 px-4 rounded-lg font-semibold transition-all"
             >
-              إعداد المحفظة
+              إنشاء المحفظة
+            </button>
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg font-semibold transition-all"
+            >
+              إلغاء
             </button>
           </div>
         </div>
       </div>
     );
-  }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Notification */}
-      {notification && (
-        <div className={`fixed top-4 right-4 z-50 rounded-lg p-4 border shadow-lg transition-all duration-300 ${
-          notification.type === 'success' ? 'bg-green-500/20 border-green-500/30 text-green-400' :
-          notification.type === 'error' ? 'bg-red-500/20 border-red-500/30 text-red-400' :
-          'bg-blue-500/20 border-blue-500/30 text-blue-400'
-        }`}>
-          {notification.message}
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <WalletIcon className="w-8 h-8 text-blue-400" />
+          <div>
+            <h2 className="text-2xl font-bold text-white">إدارة المحافظ</h2>
+            <p className="text-gray-400">إنشاء ومتابعة محافظ التداول التلقائي</p>
+          </div>
         </div>
-      )}
-
-      {/* Portfolio Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">الرصيد الإجمالي</h3>
-            <WalletIcon className="w-6 h-6 text-blue-400" />
-          </div>
-          <div className="text-3xl font-bold text-white">
-            ${totalBalance.toLocaleString()}
-          </div>
-          <div className="text-sm text-gray-400 mt-2">متاح للاستثمار</div>
-        </div>
-
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">المحافظ النشطة</h3>
-            <ChartPieIcon className="w-6 h-6 text-green-400" />
-          </div>
-          <div className="text-3xl font-bold text-white">
-            {portfolios.length}
-          </div>
-          <div className="text-sm text-gray-400 mt-2">محفظة تداول</div>
-        </div>
-
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">الربح/الخسارة</h3>
-            <ArrowTrendingUpIcon className="w-6 h-6 text-purple-400" />
-          </div>
-          <div className="text-3xl font-bold text-green-400">
-            +$0.00
-          </div>
-          <div className="text-sm text-gray-400 mt-2">0.00%</div>
-        </div>
-      </div>
-
-      {/* Create Portfolio Button */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold text-white">محافظ التداول</h2>
-        <button
-          onClick={() => setShowCreatePortfolio(true)}
-          className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center space-x-2 space-x-reverse"
-        >
-          <PlusIcon className="w-4 h-4" />
-          <span>إنشاء محفظة جديدة</span>
-        </button>
-      </div>
-
-      {/* Create Portfolio Modal */}
-      {showCreatePortfolio && (
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-          <h3 className="text-lg font-semibold text-white mb-4">إنشاء محفظة جديدة</h3>
+        
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <button
+            onClick={fetchPortfolios}
+            disabled={loading}
+            className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-colors"
+            title="تحديث"
+          >
+            <ArrowPathIcon className={`w-5 h-5 text-blue-400 ${loading ? 'animate-spin' : ''}`} />
+          </button>
           
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                المبلغ المراد استثماره:
-              </label>
-              <input
-                type="number"
-                value={newPortfolioAmount}
-                onChange={(e) => setNewPortfolioAmount(e.target.value)}
-                max={totalBalance}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <div className="text-xs text-gray-400 mt-1">
-                الرصيد المتاح: ${totalBalance.toLocaleString()}
-              </div>
-            </div>
-
-            <div className="flex space-x-3 space-x-reverse">
-              <button
-                onClick={createPortfolio}
-                disabled={!newPortfolioAmount || parseFloat(newPortfolioAmount) <= 0 || parseFloat(newPortfolioAmount) > totalBalance}
-                className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white py-2 rounded-lg font-semibold transition-all"
-              >
-                إنشاء المحفظة
-              </button>
-              <button
-                onClick={() => setShowCreatePortfolio(false)}
-                className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-semibold transition-all"
-              >
-                إلغاء
-              </button>
-            </div>
-          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center space-x-2 space-x-reverse"
+          >
+            <PlusIcon className="w-5 h-5" />
+            <span>محفظة جديدة</span>
+          </button>
         </div>
-      )}
+      </div>
 
-      {/* Portfolios List */}
-      {portfolios.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {portfolios.map((portfolio) => (
-            <div key={portfolio.id} className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">{portfolio.name}</h3>
-                <div className="flex items-center space-x-2 space-x-reverse">
-                  <button className="text-gray-400 hover:text-white">
-                    <EyeIcon className="w-4 h-4" />
-                  </button>
-                  <button className="text-gray-400 hover:text-red-400">
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">المبلغ الأولي:</span>
-                  <span className="text-white font-semibold">${portfolio.initialAmount.toLocaleString()}</span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-gray-400">القيمة الحالية:</span>
-                  <span className="text-white font-semibold">${portfolio.currentValue.toLocaleString()}</span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-gray-400">الربح/الخسارة:</span>
-                  <span className={`font-semibold ${
-                    portfolio.pnl >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    ${portfolio.pnl.toFixed(2)} ({portfolio.pnlPercentage.toFixed(2)}%)
-                  </span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span className="text-gray-400">الحالة:</span>
-                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                    portfolio.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
-                  }`}>
-                    {portfolio.status === 'active' ? 'نشط' : 'غير نشط'}
-                  </span>
-                </div>
+      {/* Portfolios Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 animate-pulse">
+              <div className="space-y-4">
+                <div className="h-6 bg-white/20 rounded"></div>
+                <div className="h-4 bg-white/10 rounded"></div>
+                <div className="h-4 bg-white/10 rounded w-3/4"></div>
               </div>
             </div>
           ))}
         </div>
+      ) : portfolios.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {portfolios.map((portfolio) => (
+            <PortfolioCard key={portfolio.id} portfolio={portfolio} />
+          ))}
+        </div>
       ) : (
         <div className="text-center py-12">
-          <ChartPieIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">لا توجد محافظ بعد</h3>
-          <p className="text-gray-400 mb-6">ابدأ بإنشاء محفظة تداول جديدة لتتبع استثماراتك</p>
+          <WalletIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">لا توجد محافظ</h3>
+          <p className="text-gray-400 mb-6">ابدأ بإنشاء محفظة تداول جديدة</p>
           <button
-            onClick={() => setShowCreatePortfolio(true)}
-            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-6 py-3 rounded-xl font-semibold transition-all"
+            onClick={() => setShowCreateModal(true)}
+            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-6 py-3 rounded-lg font-semibold transition-all inline-flex items-center space-x-2 space-x-reverse"
           >
-            إنشاء محفظة جديدة
+            <PlusIcon className="w-5 h-5" />
+            <span>إنشاء محفظة</span>
           </button>
         </div>
       )}
+
+      {/* Performance Details Modal */}
+      {performanceData && selectedPortfolio && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-2xl mx-4 border border-white/20 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white">تفاصيل الأداء</h2>
+              <button
+                onClick={() => setSelectedPortfolio(null)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div className="bg-white/5 rounded-xl p-4">
+                <div className="text-sm text-gray-400 mb-1">إجمالي القيمة</div>
+                <div className="text-2xl font-bold text-white">
+                  ${performanceData.total_portfolio_value?.toLocaleString()}
+                </div>
+              </div>
+              
+              <div className="bg-white/5 rounded-xl p-4">
+                <div className="text-sm text-gray-400 mb-1">العائد الإجمالي</div>
+                <div className={`text-2xl font-bold ${getReturnColor(performanceData.total_return)}`}>
+                  ${performanceData.total_return?.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <span className="text-gray-400">الرصيد الحالي:</span>
+                <span className="text-white font-semibold">${performanceData.current_balance?.toLocaleString()}</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-gray-400">قيمة المراكز:</span>
+                <span className="text-white font-semibold">${performanceData.current_position_value?.toLocaleString()}</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-gray-400">نسبة العائد:</span>
+                <span className={`font-semibold ${getReturnColor(performanceData.return_percentage)}`}>
+                  {performanceData.return_percentage?.toFixed(2)}%
+                </span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-gray-400">معدل النجاح:</span>
+                <span className="text-blue-400 font-semibold">{performanceData.success_rate?.toFixed(1)}%</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-gray-400">إجمالي الصفقات:</span>
+                <span className="text-white font-semibold">{performanceData.total_trades}</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-gray-400">الصفقات الناجحة:</span>
+                <span className="text-green-400 font-semibold">{performanceData.successful_trades}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <CreatePortfolioModal />
     </div>
   );
 };
+
+export default PortfolioTab;
