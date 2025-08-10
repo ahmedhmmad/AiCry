@@ -13,6 +13,8 @@ from simple_ai import simple_ai
 from advanced_ai import advanced_ai
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
+from enhanced_trading_signals import EnhancedTradingSignals, analyze_timeframe_consensus
+
 
 load_dotenv()
 
@@ -27,6 +29,9 @@ redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
 
 # Binance client
 binance_client = BinanceClient()
+
+# Enhanced trading client
+enhanced_signals = EnhancedTradingSignals(binance_client)
 
 # Alert service
 alert_service = AlertService(DATABASE_URL)
@@ -293,6 +298,330 @@ def combine_recommendations(technical: Dict, simple_ai: Dict, advanced_ai: Dict)
             "contributing_signals": 0,
             "error": str(e)
         }
+
+
+@app.get("/trading/signals/enhanced/{symbol}")
+async def get_enhanced_trading_signals(
+    symbol: str,
+    timeframe: str = Query(default="1h", description="1m, 5m, 15m, 1h, 4h, 1d"),
+    signal_strength: str = Query(default="all", description="strong, medium, weak, all")
+):
+    """
+    الحصول على إشارات التداول المحسنة مع تحليل متقدم
+
+    المميزات الجديدة:
+    - تحليل RSI مع تأكيد الحجم
+    - إشارات MACD المحسنة مع الهيستوجرام
+    - كشف عصر Bollinger Bands
+    - تحديد Golden/Death Cross
+    - تحليل انفجارات الحجم
+    - دمج تنبؤات AI
+    """
+    try:
+        result = enhanced_signals.get_enhanced_trading_signals(
+            symbol=symbol.upper(),
+            timeframe=timeframe,
+            signal_strength=signal_strength
+        )
+
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return clean_response_data(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.get("/trading/signals/compare/{symbol}")
+async def compare_trading_signals(
+    symbol: str,
+    timeframes: str = Query(default="1h,4h,1d", description="Comma-separated timeframes")
+):
+    """
+    مقارنة الإشارات عبر أطر زمنية متعددة للحصول على رؤية شاملة
+
+    مثال: /trading/signals/compare/BTCUSDT?timeframes=15m,1h,4h,1d
+    """
+    try:
+        timeframe_list = [tf.strip() for tf in timeframes.split(",")]
+        comparison_results = {}
+
+        for tf in timeframe_list:
+            try:
+                result = enhanced_signals.get_enhanced_trading_signals(
+                    symbol=symbol.upper(),
+                    timeframe=tf,
+                    signal_strength="medium"  # التركيز على الإشارات المتوسطة والقوية
+                )
+                comparison_results[tf] = result
+            except Exception as e:
+                comparison_results[tf] = {"error": str(e)}
+
+        # تحليل التوافق بين الأطر الزمنية
+        consensus_analysis = analyze_timeframe_consensus(comparison_results)
+
+        return clean_response_data({
+            "symbol": symbol.upper(),
+            "timeframe_analysis": comparison_results,
+            "consensus": consensus_analysis,
+            "generated_at": datetime.utcnow().isoformat()
+        })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/trading/signals/summary/{symbol}")
+async def get_signals_summary(
+    symbol: str,
+    timeframe: str = Query(default="1h", description="Primary timeframe for analysis")
+):
+    """
+    ملخص سريع للإشارات - للاستخدام في الداشبورد
+    """
+    try:
+        result = enhanced_signals.get_enhanced_trading_signals(
+            symbol=symbol.upper(),
+            timeframe=timeframe,
+            signal_strength="medium"  # الإشارات المتوسطة والقوية فقط
+        )
+
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        # استخراج الملخص
+        overall = result.get("overall_assessment", {})
+        market_ctx = result.get("market_context", {})
+        signals = result.get("signals", [])
+
+        # إحصائيات سريعة
+        signal_types = {}
+        for signal in signals:
+            signal_type = signal.get("type", "UNKNOWN")
+            if signal_type not in signal_types:
+                signal_types[signal_type] = 0
+            signal_types[signal_type] += 1
+
+        summary = {
+            "symbol": symbol.upper(),
+            "current_price": result.get("current_price", 0),
+            "overall_signal": overall.get("overall_signal", "HOLD"),
+            "confidence": overall.get("confidence", 50),
+            "trend": market_ctx.get("trend", "SIDEWAYS"),
+            "risk_level": market_ctx.get("risk_level", "MEDIUM"),
+            "price_change_24h": market_ctx.get("price_change_24h", 0),
+            "signal_counts": signal_types,
+            "total_signals": len(signals),
+            "strongest_signal": overall.get("strongest_signal", {}),
+            "recommendation": overall.get("recommendation", "No clear signals"),
+            "last_updated": result.get("timestamp")
+        }
+
+        return clean_response_data(summary)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/trading/signals/watchlist")
+async def get_watchlist_signals(
+    symbols: str = Query(default="BTCUSDT,ETHUSDT,BNBUSDT,ADAUSDT,XRPUSDT",
+                        description="Comma-separated list of symbols"),
+    timeframe: str = Query(default="1h", description="Timeframe for analysis"),
+    min_confidence: int = Query(default=70, description="Minimum confidence level")
+):
+    """
+    الحصول على إشارات قائمة المراقبة لعدة عملات
+    مفيد للحصول على نظرة عامة سريعة على السوق
+    """
+    try:
+        symbol_list = [s.strip().upper() for s in symbols.split(",")]
+        watchlist_signals = {}
+
+        for symbol in symbol_list:
+            try:
+                result = enhanced_signals.get_enhanced_trading_signals(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    signal_strength="medium"
+                )
+
+                if "error" not in result:
+                    overall = result.get("overall_assessment", {})
+                    confidence = overall.get("confidence", 0)
+
+                    # تصفية حسب الحد الأدنى للثقة
+                    if confidence >= min_confidence:
+                        watchlist_signals[symbol] = {
+                            "signal": overall.get("overall_signal", "HOLD"),
+                            "confidence": confidence,
+                            "current_price": result.get("current_price", 0),
+                            "trend": result.get("market_context", {}).get("trend", "SIDEWAYS"),
+                            "signal_count": result.get("signal_count", 0),
+                            "strongest_signal": overall.get("strongest_signal", {}).get("indicator", "NONE")
+                        }
+
+            except Exception as e:
+                watchlist_signals[symbol] = {"error": str(e)}
+
+        # ترتيب حسب الثقة
+        sorted_signals = dict(sorted(
+            watchlist_signals.items(),
+            key=lambda x: x[1].get("confidence", 0) if "error" not in x[1] else 0,
+            reverse=True
+        ))
+
+        # إحصائيات عامة
+        valid_signals = {k: v for k, v in sorted_signals.items() if "error" not in v}
+        buy_count = sum(1 for v in valid_signals.values() if v.get("signal") == "BUY")
+        sell_count = sum(1 for v in valid_signals.values() if v.get("signal") == "SELL")
+
+        return clean_response_data({
+            "watchlist": sorted_signals,
+            "summary": {
+                "total_symbols": len(symbol_list),
+                "signals_found": len(valid_signals),
+                "buy_signals": buy_count,
+                "sell_signals": sell_count,
+                "hold_signals": len(valid_signals) - buy_count - sell_count,
+                "min_confidence": min_confidence,
+                "timeframe": timeframe
+            },
+            "generated_at": datetime.utcnow().isoformat()
+        })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/trading/signals/help")
+async def get_enhanced_signals_help():
+    """
+    دليل استخدام نظام الإشارات المحسن
+    """
+    return {
+        "title": "Enhanced Trading Signals System v1.0",
+        "description": "نظام إشارات التداول المحسن مع تحليل متقدم ومؤشرات ذكية",
+
+        "endpoints": {
+            "enhanced_signals": {
+                "url": "/trading/signals/enhanced/{symbol}",
+                "description": "الحصول على إشارات تداول محسنة مع تحليل متقدم",
+                "parameters": {
+                    "symbol": "رمز العملة (مثل BTCUSDT)",
+                    "timeframe": "الإطار الزمني (1m, 5m, 15m, 1h, 4h, 1d)",
+                    "signal_strength": "قوة الإشارة (strong, medium, weak, all)"
+                },
+                "example": "/trading/signals/enhanced/BTCUSDT?timeframe=1h&signal_strength=strong"
+            },
+
+            "compare_signals": {
+                "url": "/trading/signals/compare/{symbol}",
+                "description": "مقارنة الإشارات عبر أطر زمنية متعددة",
+                "parameters": {
+                    "symbol": "رمز العملة",
+                    "timeframes": "أطر زمنية مفصولة بفاصلة"
+                },
+                "example": "/trading/signals/compare/ETHUSDT?timeframes=1h,4h,1d"
+            },
+
+            "signals_summary": {
+                "url": "/trading/signals/summary/{symbol}",
+                "description": "ملخص سريع للإشارات - مناسب للداشبورد",
+                "example": "/trading/signals/summary/BTCUSDT?timeframe=1h"
+            },
+
+            "watchlist_signals": {
+                "url": "/trading/signals/watchlist",
+                "description": "إشارات قائمة المراقبة لعدة عملات",
+                "parameters": {
+                    "symbols": "قائمة العملات مفصولة بفاصلة",
+                    "timeframe": "الإطار الزمني",
+                    "min_confidence": "الحد الأدنى للثقة"
+                },
+                "example": "/trading/signals/watchlist?symbols=BTCUSDT,ETHUSDT&min_confidence=70"
+            }
+        },
+
+        "features": [
+            "Enhanced RSI signals with volume confirmation",
+            "Advanced MACD analysis with histogram trends",
+            "Bollinger Bands squeeze detection for breakouts",
+            "Golden Cross and Death Cross identification",
+            "High volume breakout and breakdown detection",
+            "AI model predictions integration",
+            "Multi-timeframe consensus analysis",
+            "Market context and risk assessment",
+            "Confidence-weighted signal aggregation",
+            "Watchlist monitoring for multiple symbols"
+        ],
+
+        "signal_indicators": {
+            "RSI_OVERSOLD": "RSI below 30 with volume confirmation",
+            "RSI_OVERBOUGHT": "RSI above 70 with volume confirmation",
+            "MACD_BULLISH_CROSSOVER": "MACD crossing above signal line",
+            "MACD_BEARISH_CROSSOVER": "MACD crossing below signal line",
+            "BB_LOWER_BOUNCE": "Price touching Bollinger lower band",
+            "BB_UPPER_REJECTION": "Price touching Bollinger upper band",
+            "GOLDEN_CROSS": "EMA 20 crossing above EMA 50",
+            "DEATH_CROSS": "EMA 20 crossing below EMA 50",
+            "HIGH_VOLUME_BREAKOUT": "Strong price move with volume",
+            "EMA20_BREAKOUT": "Price breaking above/below EMA 20",
+            "SIMPLE_AI_PREDICTION": "Simple AI model recommendation"
+        },
+
+        "confidence_levels": {
+            "90-100": "Exceptional - Very strong signal with multiple confirmations",
+            "80-89": "Very High - Strong signal with good confirmations",
+            "70-79": "High - Good signal with some confirmations",
+            "60-69": "Medium - Moderate signal, use with caution",
+            "50-59": "Low - Weak signal, monitor closely",
+            "0-49": "Very Low - Very weak signal, avoid trading"
+        },
+
+        "strength_levels": {
+            "STRONG": "High confidence signals (80%+) with multiple confirmations",
+            "MEDIUM": "Moderate confidence signals (60-79%) with some confirmations",
+            "WEAK": "Low confidence signals (40-59%) requiring additional confirmation"
+        },
+
+        "market_trends": {
+            "STRONG_UPTREND": "Price above EMA20 > EMA50 - Strong bullish momentum",
+            "UPTREND": "Price above EMA20 - Moderate bullish momentum",
+            "SIDEWAYS": "Price trading around moving averages - No clear direction",
+            "DOWNTREND": "Price below EMA20 - Moderate bearish momentum",
+            "STRONG_DOWNTREND": "Price below EMA20 < EMA50 - Strong bearish momentum"
+        },
+
+        "risk_levels": {
+            "LOW": "Volatility < 4% and Volume Ratio < 1.5 - Stable conditions",
+            "MEDIUM": "Moderate volatility 4-8% or Volume Ratio 1.5-3 - Normal conditions",
+            "HIGH": "Volatility > 8% or Volume Ratio > 3 - Volatile conditions"
+        },
+
+        "usage_tips": [
+            "Use multiple timeframes for better confirmation",
+            "Higher confidence signals are more reliable",
+            "Consider market context and risk levels before trading",
+            "Strong signals (80%+ confidence) are preferred for entry/exit",
+            "Monitor watchlist for opportunities across multiple assets",
+            "Combine with your own analysis for best results",
+            "Pay attention to volume confirmation in signals",
+            "Use summary endpoint for quick dashboard updates"
+        ],
+
+        "best_practices": [
+            "Start with summary endpoint to get quick overview",
+            "Use compare endpoint to check multiple timeframes",
+            "Filter signals by strength (medium/strong) for better quality",
+            "Monitor risk level - avoid trading in HIGH risk periods",
+            "Use watchlist endpoint to scan multiple symbols efficiently",
+            "Look for consensus across different timeframes",
+            "Pay attention to strongest_signal for best opportunities"
+        ]
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
