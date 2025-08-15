@@ -1,490 +1,438 @@
 // components/Dashboard/PortfolioTab.js
 import React, { useState, useEffect } from 'react';
 import { 
-  WalletIcon, 
-  PlusIcon, 
-  TrashIcon,
+  WalletIcon,
+  PlusIcon,
+  MinusIcon,
   ChartBarIcon,
-  CurrencyDollarIcon,
-  TrendingUpIcon,
-  TrendingDownIcon,
-  ClockIcon,
-  ArrowPathIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  PlayIcon,
-  PauseIcon
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline';
-import axios from 'axios';
 
-// Configure axios for backend connection
-const API_BASE_URL = 'http://152.67.153.191:8000';
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  }
-});
-
-const PortfolioTab = ({ selectedSymbol }) => {
-  const [portfolios, setPortfolios] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [backendConnected, setBackendConnected] = useState(false);
-  const [newPortfolio, setNewPortfolio] = useState({
-    user_id: 'user_001',
-    symbol: selectedSymbol || 'BTCUSDT',
-    initial_balance: 1000,
-    risk_level: 'MEDIUM'
+export const PortfolioTab = ({ portfolioData, setPortfolioData }) => {
+  const [showAddPosition, setShowAddPosition] = useState(false);
+  const [newPosition, setNewPosition] = useState({
+    symbol: '',
+    amount: '',
+    price: ''
   });
-  const [selectedPortfolio, setSelectedPortfolio] = useState(null);
-  const [performanceData, setPerformanceData] = useState(null);
+  const [selectedTimeframe, setSelectedTimeframe] = useState('24h');
 
+  // إذا لم يتم تمرير portfolioData، استخدم بيانات افتراضية
+  const defaultPortfolioData = {
+    balance: 10000,
+    positions: [
+      { symbol: 'BTC', amount: 0.25, avgPrice: 45000, currentPrice: 47500, value: 11875, pnl: 625 },
+      { symbol: 'ETH', amount: 5.5, avgPrice: 2800, currentPrice: 2950, value: 16225, pnl: 825 },
+      { symbol: 'BNB', amount: 20, avgPrice: 320, currentPrice: 315, value: 6300, pnl: -100 },
+      { symbol: 'ADA', amount: 1000, avgPrice: 1.2, currentPrice: 1.15, value: 1150, pnl: -50 }
+    ],
+    totalValue: 35550,
+    totalPnl: 1300,
+    dailyChange: 2.3
+  };
+
+  const currentPortfolio = portfolioData || defaultPortfolioData;
+
+  // حساب إجمالي القيم
   useEffect(() => {
-    fetchPortfolios();
-  }, []);
+    if (setPortfolioData && portfolioData) {
+      const totalValue = portfolioData.positions.reduce((sum, pos) => sum + pos.value, 0) + portfolioData.balance;
+      const totalPnl = portfolioData.positions.reduce((sum, pos) => sum + pos.pnl, 0);
+      
+      setPortfolioData(prev => ({
+        ...prev,
+        totalValue,
+        totalPnl
+      }));
+    }
+  }, [portfolioData?.positions, portfolioData?.balance, setPortfolioData]);
 
-  useEffect(() => {
-    setNewPortfolio(prev => ({ ...prev, symbol: selectedSymbol || 'BTCUSDT' }));
-  }, [selectedSymbol]);
+  // إضافة مركز جديد
+  const handleAddPosition = () => {
+    if (newPosition.symbol && newPosition.amount && newPosition.price && setPortfolioData) {
+      const amount = parseFloat(newPosition.amount);
+      const price = parseFloat(newPosition.price);
+      const value = amount * price;
+      
+      const position = {
+        symbol: newPosition.symbol.toUpperCase(),
+        amount: amount,
+        avgPrice: price,
+        currentPrice: price * (1 + (Math.random() - 0.5) * 0.1), // محاكاة السعر الحالي
+        value: value,
+        pnl: 0
+      };
 
-  const fetchPortfolios = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get('/trading/portfolios/user_001');
-      setPortfolios(response.data.portfolios || []);
-      setBackendConnected(true);
-    } catch (error) {
-      console.error('خطأ في جلب المحافظ:', error);
-      setBackendConnected(false);
-      // Use demo data
-      setPortfolios([
-        {
-          id: 'demo-1',
-          symbol: 'BTCUSDT',
-          strategy: 'AI_HYBRID',
-          risk_level: 'MEDIUM',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          performance: {
-            current_balance: 1050.75,
-            total_portfolio_value: 1125.30,
-            total_return: 125.30,
-            return_percentage: 12.53,
-            success_rate: 75.5,
-            total_trades: 8,
-            successful_trades: 6
-          }
-        }
-      ]);
-    } finally {
-      setLoading(false);
+      setPortfolioData(prev => ({
+        ...prev,
+        positions: [...prev.positions, position],
+        balance: prev.balance - value
+      }));
+
+      setNewPosition({ symbol: '', amount: '', price: '' });
+      setShowAddPosition(false);
     }
   };
 
-  const createPortfolio = async () => {
-    try {
-      const response = await api.post('/trading/portfolio/create', newPortfolio);
-      setShowCreateModal(false);
-      setNewPortfolio({
-        user_id: 'user_001',
-        symbol: selectedSymbol || 'BTCUSDT',
-        initial_balance: 1000,
-        risk_level: 'MEDIUM'
-      });
-      fetchPortfolios();
-      setBackendConnected(true);
-    } catch (error) {
-      console.error('خطأ في إنشاء المحفظة:', error);
-      setBackendConnected(false);
-      // Show demo success
-      alert('تم إنشاء المحفظة (وضع تجريبي)');
-      setShowCreateModal(false);
+  // حذف مركز
+  const handleRemovePosition = (index) => {
+    if (setPortfolioData) {
+      const position = currentPortfolio.positions[index];
+      setPortfolioData(prev => ({
+        ...prev,
+        positions: prev.positions.filter((_, i) => i !== index),
+        balance: prev.balance + position.value
+      }));
     }
   };
 
-  const deletePortfolio = async (portfolioId) => {
-    if (window.confirm('هل أنت متأكد من حذف هذه المحفظة؟')) {
-      try {
-        await api.delete(`/trading/portfolio/${portfolioId}`);
-        fetchPortfolios();
-        setBackendConnected(true);
-      } catch (error) {
-        console.error('خطأ في حذف المحفظة:', error);
-        setBackendConnected(false);
-        // Demo delete
-        setPortfolios(prev => prev.filter(p => p.id !== portfolioId));
-      }
-    }
-  };
-
-  const getPerformanceData = async (portfolioId) => {
-    try {
-      const response = await api.get(`/trading/portfolio/performance/${portfolioId}`);
-      setPerformanceData(response.data);
-      setSelectedPortfolio(portfolioId);
-      setBackendConnected(true);
-    } catch (error) {
-      console.error('خطأ في جلب بيانات الأداء:', error);
-      setBackendConnected(false);
-      // Demo performance data
-      setPerformanceData({
-        total_portfolio_value: 1125.30,
-        current_balance: 1050.75,
-        current_position_value: 74.55,
-        total_return: 125.30,
-        return_percentage: 12.53,
-        success_rate: 75.5,
-        total_trades: 8,
-        successful_trades: 6
-      });
-      setSelectedPortfolio(portfolioId);
-    }
-  };
-
-  const executeAutoTrade = async (portfolioId) => {
-    try {
-      const response = await api.post(`/trading/portfolio/auto-trade/${portfolioId}`);
-      console.log('نتيجة التداول التلقائي:', response.data);
-      fetchPortfolios();
-      setBackendConnected(true);
-    } catch (error) {
-      console.error('خطأ في التداول التلقائي:', error);
-      setBackendConnected(false);
-      // Demo trade execution
-      alert('تم تنفيذ تداول تجريبي');
-      fetchPortfolios();
-    }
-  };
-
-  const getRiskLevelColor = (level) => {
-    switch (level) {
-      case 'LOW': return 'text-green-400 bg-green-500/20';
-      case 'HIGH': return 'text-red-400 bg-red-500/20';
-      default: return 'text-yellow-400 bg-yellow-500/20';
-    }
-  };
-
-  const getRiskLevelText = (level) => {
-    switch (level) {
-      case 'LOW': return 'منخفض';
-      case 'HIGH': return 'عالي';
-      default: return 'متوسط';
-    }
-  };
-
-  const getReturnColor = (returnValue) => {
-    if (returnValue > 0) return 'text-green-400';
-    if (returnValue < 0) return 'text-red-400';
-    return 'text-gray-400';
-  };
-
-  const PortfolioCard = ({ portfolio }) => {
-    const performance = portfolio.performance;
-    
-    return (
-      <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 hover:border-white/30 transition-all">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3 space-x-reverse">
-            <WalletIcon className="w-6 h-6 text-blue-400" />
-            <div>
-              <h3 className="text-lg font-semibold text-white">{portfolio.symbol}</h3>
-              <span className={`px-2 py-1 rounded text-xs ${getRiskLevelColor(portfolio.risk_level)}`}>
-                {getRiskLevelText(portfolio.risk_level)}
-              </span>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-2 space-x-reverse">
-            <button
-              onClick={() => getPerformanceData(portfolio.id)}
-              className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-colors"
-              title="عرض التفاصيل"
-            >
-              <ChartBarIcon className="w-5 h-5 text-blue-400" />
-            </button>
-            
-            <button
-              onClick={() => executeAutoTrade(portfolio.id)}
-              className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg transition-colors"
-              title="تنفيذ تداول تلقائي"
-            >
-              <PlayIcon className="w-5 h-5 text-green-400" />
-            </button>
-            
-            <button
-              onClick={() => deletePortfolio(portfolio.id)}
-              className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors"
-              title="حذف المحفظة"
-            >
-              <TrashIcon className="w-5 h-5 text-red-400" />
-            </button>
-          </div>
-        </div>
-
-        {performance && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm text-gray-400">الرصيد الحالي</div>
-                <div className="text-xl font-bold text-white">
-                  ${performance.current_balance?.toLocaleString()}
-                </div>
-              </div>
-              
-              <div>
-                <div className="text-sm text-gray-400">إجمالي القيمة</div>
-                <div className="text-xl font-bold text-white">
-                  ${performance.total_portfolio_value?.toLocaleString()}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm text-gray-400">العائد</div>
-                <div className={`text-lg font-semibold ${getReturnColor(performance.total_return)}`}>
-                  {performance.return_percentage?.toFixed(2)}%
-                </div>
-              </div>
-              
-              <div>
-                <div className="text-sm text-gray-400">معدل النجاح</div>
-                <div className="text-lg font-semibold text-blue-400">
-                  {performance.success_rate?.toFixed(1)}%
-                </div>
-              </div>
-            </div>
-
-            <div className="text-xs text-gray-400 pt-2 border-t border-white/10">
-              إجمالي الصفقات: {performance.total_trades} | 
-              الصفقات الناجحة: {performance.successful_trades}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const CreatePortfolioModal = () => {
-    if (!showCreateModal) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md mx-4 border border-white/20">
-          <h2 className="text-xl font-bold text-white mb-4">إنشاء محفظة جديدة</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">العملة</label>
-              <select
-                value={newPortfolio.symbol}
-                onChange={(e) => setNewPortfolio(prev => ({ ...prev, symbol: e.target.value }))}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
-              >
-                <option value="BTCUSDT">Bitcoin (BTC)</option>
-                <option value="ETHUSDT">Ethereum (ETH)</option>
-                <option value="BNBUSDT">Binance Coin (BNB)</option>
-                <option value="SOLUSDT">Solana (SOL)</option>
-                <option value="ADAUSDT">Cardano (ADA)</option>
-                <option value="XRPUSDT">Ripple (XRP)</option>
-                <option value="DOGEUSDT">Dogecoin (DOGE)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">الرصيد الأولي ($)</label>
-              <input
-                type="number"
-                value={newPortfolio.initial_balance}
-                onChange={(e) => setNewPortfolio(prev => ({ ...prev, initial_balance: parseFloat(e.target.value) }))}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
-                min="100"
-                step="100"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">مستوى المخاطرة</label>
-              <select
-                value={newPortfolio.risk_level}
-                onChange={(e) => setNewPortfolio(prev => ({ ...prev, risk_level: e.target.value }))}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
-              >
-                <option value="LOW">منخفض - استثمار آمن</option>
-                <option value="MEDIUM">متوسط - متوازن</option>
-                <option value="HIGH">عالي - مخاطر عالية</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 space-x-reverse mt-6">
-            <button
-              onClick={createPortfolio}
-              className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white py-2 px-4 rounded-lg font-semibold transition-all"
-            >
-              إنشاء المحفظة
-            </button>
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg font-semibold transition-all"
-            >
-              إلغاء
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  // بيانات الأداء للرسم البياني (محاكاة)
+  const performanceData = {
+    '24h': [
+      { time: '00:00', value: 34200 },
+      { time: '04:00', value: 34800 },
+      { time: '08:00', value: 35100 },
+      { time: '12:00', value: 35550 },
+      { time: '16:00', value: 35200 },
+      { time: '20:00', value: 35550 }
+    ],
+    '7d': [
+      { time: 'Mon', value: 33000 },
+      { time: 'Tue', value: 34200 },
+      { time: 'Wed', value: 35100 },
+      { time: 'Thu', value: 34800 },
+      { time: 'Fri', value: 35550 },
+      { time: 'Sat', value: 35200 },
+      { time: 'Sun', value: 35550 }
+    ],
+    '30d': [
+      { time: 'Week 1', value: 32000 },
+      { time: 'Week 2', value: 33500 },
+      { time: 'Week 3', value: 34200 },
+      { time: 'Week 4', value: 35550 }
+    ]
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3 space-x-reverse">
-          <WalletIcon className="w-8 h-8 text-blue-400" />
-          <div>
-            <h2 className="text-2xl font-bold text-white">إدارة المحافظ</h2>
-            <p className="text-gray-400">إنشاء ومتابعة محافظ التداول التلقائي</p>
+      {/* Portfolio Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-2">
+            <WalletIcon className="w-8 h-8 text-green-400" />
+            <span className="text-green-400 text-sm">إجمالي القيمة</span>
+          </div>
+          <div className="text-white text-2xl font-bold">${currentPortfolio.totalValue.toLocaleString()}</div>
+          <div className={`text-sm flex items-center mt-1 ${currentPortfolio.dailyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {currentPortfolio.dailyChange >= 0 ? 
+              <ArrowTrendingUpIcon className="w-4 h-4 mr-1" /> : 
+              <ArrowTrendingDownIcon className="w-4 h-4 mr-1" />
+            }
+            {Math.abs(currentPortfolio.dailyChange).toFixed(2)}% (24h)
           </div>
         </div>
         
-        <div className="flex items-center space-x-3 space-x-reverse">
-          <button
-            onClick={fetchPortfolios}
-            disabled={loading}
-            className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-colors"
-            title="تحديث"
-          >
-            <ArrowPathIcon className={`w-5 h-5 text-blue-400 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center space-x-2 space-x-reverse"
-          >
-            <PlusIcon className="w-5 h-5" />
-            <span>محفظة جديدة</span>
-          </button>
+        <div className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-2">
+            <ChartBarIcon className="w-8 h-8 text-blue-400" />
+            <span className="text-blue-400 text-sm">المراكز المفتوحة</span>
+          </div>
+          <div className="text-white text-2xl font-bold">{currentPortfolio.positions.length}</div>
+          <div className="text-gray-400 text-sm mt-1">عملات مختلفة</div>
+        </div>
+        
+        <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-8 h-8 flex items-center justify-center">
+              {currentPortfolio.totalPnl >= 0 ? '📈' : '📉'}
+            </div>
+            <span className="text-purple-400 text-sm">الربح/الخسارة</span>
+          </div>
+          <div className={`text-2xl font-bold ${currentPortfolio.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {currentPortfolio.totalPnl >= 0 ? '+' : ''}${currentPortfolio.totalPnl.toLocaleString()}
+          </div>
+          <div className="text-gray-400 text-sm mt-1">
+            {((currentPortfolio.totalPnl / (currentPortfolio.totalValue - currentPortfolio.totalPnl)) * 100).toFixed(2)}%
+          </div>
+        </div>
+        
+        <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-8 h-8 flex items-center justify-center text-yellow-400">💰</div>
+            <span className="text-yellow-400 text-sm">الرصيد المتاح</span>
+          </div>
+          <div className="text-white text-2xl font-bold">${currentPortfolio.balance.toLocaleString()}</div>
+          <div className="text-gray-400 text-sm mt-1">للاستثمار</div>
         </div>
       </div>
 
-      {/* Connection Status */}
-      {!backendConnected && (
-        <div className="bg-yellow-500/10 backdrop-blur-md rounded-xl p-4 border border-yellow-500/20">
-          <div className="flex items-center space-x-3 space-x-reverse">
-            <ExclamationTriangleIcon className="w-5 h-5 text-yellow-400" />
-            <span className="text-yellow-400 font-medium">وضع تجريبي</span>
-            <span className="text-gray-400 text-sm">- لا يمكن الاتصال بالخادم</span>
+      {/* Performance Chart */}
+      <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-white font-semibold text-lg">أداء المحفظة</h3>
+          <div className="flex space-x-2 space-x-reverse">
+            {['24h', '7d', '30d'].map((timeframe) => (
+              <button
+                key={timeframe}
+                onClick={() => setSelectedTimeframe(timeframe)}
+                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                  selectedTimeframe === timeframe
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                {timeframe}
+              </button>
+            ))}
           </div>
         </div>
-      )}
-
-      {/* Portfolios Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 animate-pulse">
-              <div className="space-y-4">
-                <div className="h-6 bg-white/20 rounded"></div>
-                <div className="h-4 bg-white/10 rounded"></div>
-                <div className="h-4 bg-white/10 rounded w-3/4"></div>
-              </div>
+        
+        {/* Simple Chart Representation */}
+        <div className="h-40 flex items-end space-x-2 space-x-reverse">
+          {performanceData[selectedTimeframe].map((point, index) => (
+            <div key={index} className="flex-1 flex flex-col items-center">
+              <div 
+                className="bg-gradient-to-t from-blue-500 to-purple-500 rounded-t-lg w-full transition-all duration-500"
+                style={{ 
+                  height: `${((point.value - 30000) / 10000) * 100}%`,
+                  minHeight: '20px'
+                }}
+              ></div>
+              <span className="text-xs text-gray-400 mt-2">{point.time}</span>
             </div>
           ))}
         </div>
-      ) : portfolios.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {portfolios.map((portfolio) => (
-            <PortfolioCard key={portfolio.id} portfolio={portfolio} />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <WalletIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">لا توجد محافظ</h3>
-          <p className="text-gray-400 mb-6">ابدأ بإنشاء محفظة تداول جديدة</p>
+      </div>
+
+      {/* Positions List */}
+      <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-white font-semibold text-lg">المراكز المفتوحة</h3>
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-6 py-3 rounded-lg font-semibold transition-all inline-flex items-center space-x-2 space-x-reverse"
+            onClick={() => setShowAddPosition(!showAddPosition)}
+            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 space-x-reverse"
           >
-            <PlusIcon className="w-5 h-5" />
-            <span>إنشاء محفظة</span>
+            <PlusIcon className="w-4 h-4" />
+            <span>إضافة مركز</span>
           </button>
         </div>
-      )}
 
-      {/* Performance Details Modal */}
-      {performanceData && selectedPortfolio && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-2xl mx-4 border border-white/20 max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">تفاصيل الأداء</h2>
-              <button
-                onClick={() => setSelectedPortfolio(null)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                ✕
-              </button>
+        {/* Add Position Form */}
+        {showAddPosition && (
+          <div className="bg-gray-700/50 rounded-lg p-4 mb-6">
+            <h4 className="text-white font-medium mb-4">إضافة مركز جديد</h4>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">رمز العملة</label>
+                <input
+                  type="text"
+                  placeholder="BTC"
+                  value={newPosition.symbol}
+                  onChange={(e) => setNewPosition(prev => ({ ...prev, symbol: e.target.value }))}
+                  className="w-full bg-gray-600 text-white rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">الكمية</label>
+                <input
+                  type="number"
+                  placeholder="0.5"
+                  value={newPosition.amount}
+                  onChange={(e) => setNewPosition(prev => ({ ...prev, amount: e.target.value }))}
+                  className="w-full bg-gray-600 text-white rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">سعر الشراء</label>
+                <input
+                  type="number"
+                  placeholder="50000"
+                  value={newPosition.price}
+                  onChange={(e) => setNewPosition(prev => ({ ...prev, price: e.target.value }))}
+                  className="w-full bg-gray-600 text-white rounded-lg px-3 py-2"
+                />
+              </div>
+              <div className="flex items-end space-x-2 space-x-reverse">
+                <button
+                  onClick={handleAddPosition}
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  إضافة
+                </button>
+                <button
+                  onClick={() => setShowAddPosition(false)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  إلغاء
+                </button>
+              </div>
             </div>
+          </div>
+        )}
+
+        {/* Positions Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {currentPortfolio.positions.map((position, index) => (
+            <div key={index} className="bg-gray-700/30 hover:bg-gray-700/50 rounded-lg p-4 transition-all duration-300 group">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h4 className="text-white font-semibold text-lg">{position.symbol}</h4>
+                  <p className="text-gray-400 text-sm">{position.amount} {position.symbol}</p>
+                </div>
+                <div className="flex items-center space-x-2 space-x-reverse opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button className="text-blue-400 hover:text-blue-300">
+                    <EyeIcon className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleRemovePosition(index)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <MinusIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-sm">متوسط السعر:</span>
+                  <span className="text-white text-sm">${position.avgPrice.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-sm">السعر الحالي:</span>
+                  <span className="text-white text-sm">${position.currentPrice.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-sm">القيمة الحالية:</span>
+                  <span className="text-white text-sm font-medium">${position.value.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">الربح/الخسارة:</span>
+                  <div className="text-right">
+                    <div className={`font-medium ${position.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {position.pnl >= 0 ? '+' : ''}${position.pnl.toLocaleString()}
+                    </div>
+                    <div className={`text-xs ${position.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {((position.pnl / (position.amount * position.avgPrice)) * 100).toFixed(2)}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mt-3">
+                <div className="w-full bg-gray-600 rounded-full h-2">
+                  <div 
+                    className={`h-2 rounded-full transition-all duration-500 ${
+                      position.pnl >= 0 ? 'bg-green-500' : 'bg-red-500'
+                    }`}
+                    style={{ 
+                      width: `${Math.min(Math.abs((position.pnl / (position.amount * position.avgPrice)) * 100) * 2, 100)}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {currentPortfolio.positions.length === 0 && (
+          <div className="text-center py-8">
+            <div className="text-gray-400 mb-4">لا توجد مراكز مفتوحة</div>
+            <button
+              onClick={() => setShowAddPosition(true)}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors"
+            >
+              إضافة أول مركز
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Portfolio Allocation */}
+      <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-xl p-6">
+        <h3 className="text-white font-semibold text-lg mb-6">توزيع المحفظة</h3>
+        
+        <div className="space-y-4">
+          {currentPortfolio.positions.map((position, index) => {
+            const percentage = (position.value / currentPortfolio.totalValue) * 100;
+            const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-yellow-500', 'bg-red-500', 'bg-pink-500'];
             
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              <div className="bg-white/5 rounded-xl p-4">
-                <div className="text-sm text-gray-400 mb-1">إجمالي القيمة</div>
-                <div className="text-2xl font-bold text-white">
-                  ${performanceData.total_portfolio_value?.toLocaleString()}
+            return (
+              <div key={index} className="flex items-center space-x-4 space-x-reverse">
+                <div className="flex items-center space-x-3 space-x-reverse flex-1">
+                  <div className={`w-4 h-4 rounded-full ${colors[index % colors.length]}`}></div>
+                  <span className="text-white font-medium">{position.symbol}</span>
+                  <span className="text-gray-400">{position.amount} {position.symbol}</span>
+                </div>
+                <div className="flex items-center space-x-4 space-x-reverse">
+                  <span className="text-white font-medium">${position.value.toLocaleString()}</span>
+                  <span className="text-gray-400 w-12 text-right">{percentage.toFixed(1)}%</span>
+                </div>
+                <div className="w-32">
+                  <div className="w-full bg-gray-600 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full ${colors[index % colors.length]} transition-all duration-500`}
+                      style={{ width: `${percentage}%` }}
+                    ></div>
+                  </div>
                 </div>
               </div>
-              
-              <div className="bg-white/5 rounded-xl p-4">
-                <div className="text-sm text-gray-400 mb-1">العائد الإجمالي</div>
-                <div className={`text-2xl font-bold ${getReturnColor(performanceData.total_return)}`}>
-                  ${performanceData.total_return?.toLocaleString()}
-                </div>
-              </div>
+            );
+          })}
+          
+          {/* Cash allocation */}
+          <div className="flex items-center space-x-4 space-x-reverse border-t border-gray-600 pt-4">
+            <div className="flex items-center space-x-3 space-x-reverse flex-1">
+              <div className="w-4 h-4 rounded-full bg-gray-500"></div>
+              <span className="text-white font-medium">نقد</span>
+              <span className="text-gray-400">USD</span>
             </div>
-
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-gray-400">الرصيد الحالي:</span>
-                <span className="text-white font-semibold">${performanceData.current_balance?.toLocaleString()}</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-400">قيمة المراكز:</span>
-                <span className="text-white font-semibold">${performanceData.current_position_value?.toLocaleString()}</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-400">نسبة العائد:</span>
-                <span className={`font-semibold ${getReturnColor(performanceData.return_percentage)}`}>
-                  {performanceData.return_percentage?.toFixed(2)}%
-                </span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-400">معدل النجاح:</span>
-                <span className="text-blue-400 font-semibold">{performanceData.success_rate?.toFixed(1)}%</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-400">إجمالي الصفقات:</span>
-                <span className="text-white font-semibold">{performanceData.total_trades}</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-400">الصفقات الناجحة:</span>
-                <span className="text-green-400 font-semibold">{performanceData.successful_trades}</span>
+            <div className="flex items-center space-x-4 space-x-reverse">
+              <span className="text-white font-medium">${currentPortfolio.balance.toLocaleString()}</span>
+              <span className="text-gray-400 w-12 text-right">
+                {((currentPortfolio.balance / currentPortfolio.totalValue) * 100).toFixed(1)}%
+              </span>
+            </div>
+            <div className="w-32">
+              <div className="w-full bg-gray-600 rounded-full h-2">
+                <div 
+                  className="h-2 rounded-full bg-gray-500 transition-all duration-500"
+                  style={{ width: `${(currentPortfolio.balance / currentPortfolio.totalValue) * 100}%` }}
+                ></div>
               </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      <CreatePortfolioModal />
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <button className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl p-6 hover:from-green-500/30 hover:to-emerald-500/30 transition-all">
+          <div className="text-green-400 text-center">
+            <PlusIcon className="w-8 h-8 mx-auto mb-2" />
+            <div className="font-semibold">إيداع أموال</div>
+            <div className="text-sm text-gray-400">إضافة رصيد للمحفظة</div>
+          </div>
+        </button>
+        
+        <button className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-xl p-6 hover:from-blue-500/30 hover:to-cyan-500/30 transition-all">
+          <div className="text-blue-400 text-center">
+            <ArrowTrendingUpIcon className="w-8 h-8 mx-auto mb-2" />
+            <div className="font-semibold">إعادة توازن</div>
+            <div className="text-sm text-gray-400">توزيع المحفظة تلقائياً</div>
+          </div>
+        </button>
+        
+        <button className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-6 hover:from-purple-500/30 hover:to-pink-500/30 transition-all">
+          <div className="text-purple-400 text-center">
+            <ChartBarIcon className="w-8 h-8 mx-auto mb-2" />
+            <div className="font-semibold">تقرير مفصل</div>
+            <div className="text-sm text-gray-400">تحليل شامل للأداء</div>
+          </div>
+        </button>
+      </div>
     </div>
   );
 };
-
-export default PortfolioTab;
