@@ -17,12 +17,23 @@ import {
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 
+// Configure axios for backend connection
+const API_BASE_URL = 'http://152.67.153.191:8000';
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
 const PortfolioTab = ({ selectedSymbol }) => {
   const [portfolios, setPortfolios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [backendConnected, setBackendConnected] = useState(false);
   const [newPortfolio, setNewPortfolio] = useState({
-    user_id: 'user_001', // يمكن جعلها dynamic لاحقاً
+    user_id: 'user_001',
     symbol: selectedSymbol || 'BTCUSDT',
     initial_balance: 1000,
     risk_level: 'MEDIUM'
@@ -41,10 +52,32 @@ const PortfolioTab = ({ selectedSymbol }) => {
   const fetchPortfolios = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/trading/portfolios/user_001');
+      const response = await api.get('/trading/portfolios/user_001');
       setPortfolios(response.data.portfolios || []);
+      setBackendConnected(true);
     } catch (error) {
       console.error('خطأ في جلب المحافظ:', error);
+      setBackendConnected(false);
+      // Use demo data
+      setPortfolios([
+        {
+          id: 'demo-1',
+          symbol: 'BTCUSDT',
+          strategy: 'AI_HYBRID',
+          risk_level: 'MEDIUM',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          performance: {
+            current_balance: 1050.75,
+            total_portfolio_value: 1125.30,
+            total_return: 125.30,
+            return_percentage: 12.53,
+            success_rate: 75.5,
+            total_trades: 8,
+            successful_trades: 6
+          }
+        }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -52,7 +85,7 @@ const PortfolioTab = ({ selectedSymbol }) => {
 
   const createPortfolio = async () => {
     try {
-      const response = await axios.post('/trading/portfolio/create', newPortfolio);
+      const response = await api.post('/trading/portfolio/create', newPortfolio);
       setShowCreateModal(false);
       setNewPortfolio({
         user_id: 'user_001',
@@ -61,39 +94,67 @@ const PortfolioTab = ({ selectedSymbol }) => {
         risk_level: 'MEDIUM'
       });
       fetchPortfolios();
+      setBackendConnected(true);
     } catch (error) {
       console.error('خطأ في إنشاء المحفظة:', error);
+      setBackendConnected(false);
+      // Show demo success
+      alert('تم إنشاء المحفظة (وضع تجريبي)');
+      setShowCreateModal(false);
     }
   };
 
   const deletePortfolio = async (portfolioId) => {
     if (window.confirm('هل أنت متأكد من حذف هذه المحفظة؟')) {
       try {
-        await axios.delete(`/trading/portfolio/${portfolioId}`);
+        await api.delete(`/trading/portfolio/${portfolioId}`);
         fetchPortfolios();
+        setBackendConnected(true);
       } catch (error) {
         console.error('خطأ في حذف المحفظة:', error);
+        setBackendConnected(false);
+        // Demo delete
+        setPortfolios(prev => prev.filter(p => p.id !== portfolioId));
       }
     }
   };
 
   const getPerformanceData = async (portfolioId) => {
     try {
-      const response = await axios.get(`/trading/portfolio/performance/${portfolioId}`);
+      const response = await api.get(`/trading/portfolio/performance/${portfolioId}`);
       setPerformanceData(response.data);
       setSelectedPortfolio(portfolioId);
+      setBackendConnected(true);
     } catch (error) {
       console.error('خطأ في جلب بيانات الأداء:', error);
+      setBackendConnected(false);
+      // Demo performance data
+      setPerformanceData({
+        total_portfolio_value: 1125.30,
+        current_balance: 1050.75,
+        current_position_value: 74.55,
+        total_return: 125.30,
+        return_percentage: 12.53,
+        success_rate: 75.5,
+        total_trades: 8,
+        successful_trades: 6
+      });
+      setSelectedPortfolio(portfolioId);
     }
   };
 
   const executeAutoTrade = async (portfolioId) => {
     try {
-      const response = await axios.post(`/trading/portfolio/auto-trade/${portfolioId}`);
+      const response = await api.post(`/trading/portfolio/auto-trade/${portfolioId}`);
       console.log('نتيجة التداول التلقائي:', response.data);
-      fetchPortfolios(); // تحديث المحافظ
+      fetchPortfolios();
+      setBackendConnected(true);
     } catch (error) {
       console.error('خطأ في التداول التلقائي:', error);
+      setBackendConnected(false);
+      // Demo trade execution
+      alert('تم تنفيذ تداول تجريبي');
+      fetchPortfolios();
     }
   };
 
@@ -308,6 +369,17 @@ const PortfolioTab = ({ selectedSymbol }) => {
           </button>
         </div>
       </div>
+
+      {/* Connection Status */}
+      {!backendConnected && (
+        <div className="bg-yellow-500/10 backdrop-blur-md rounded-xl p-4 border border-yellow-500/20">
+          <div className="flex items-center space-x-3 space-x-reverse">
+            <ExclamationTriangleIcon className="w-5 h-5 text-yellow-400" />
+            <span className="text-yellow-400 font-medium">وضع تجريبي</span>
+            <span className="text-gray-400 text-sm">- لا يمكن الاتصال بالخادم</span>
+          </div>
+        </div>
+      )}
 
       {/* Portfolios Grid */}
       {loading ? (

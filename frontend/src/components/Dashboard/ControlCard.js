@@ -17,6 +17,16 @@ import {
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 
+// Configure axios for backend connection
+const API_BASE_URL = 'http://152.67.153.191:8000';
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
 export const ControlCard = ({ 
   loading, 
   analysisData, 
@@ -33,6 +43,7 @@ export const ControlCard = ({
   const [aiAnalysisData, setAiAnalysisData] = useState(null);
   const [tradingSignal, setTradingSignal] = useState(null);
   const [signalLoading, setSignalLoading] = useState(false);
+  const [backendConnected, setBackendConnected] = useState(false);
   
   // Advanced Analysis Settings
   const [analysisDepth, setAnalysisDepth] = useState(200);
