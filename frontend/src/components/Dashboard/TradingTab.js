@@ -20,6 +20,16 @@ import {
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 
+// Configure axios for backend connection
+const API_BASE_URL = 'http://localhost:8000';
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
 const TradingTab = ({ selectedSymbol }) => {
   const [portfolios, setPortfolios] = useState([]);
   const [selectedPortfolio, setSelectedPortfolio] = useState(null);
@@ -30,6 +40,7 @@ const TradingTab = ({ selectedSymbol }) => {
   const [recentTrades, setRecentTrades] = useState([]);
   const [marketData, setMarketData] = useState(null);
   const [coinSuggestions, setCoinSuggestions] = useState([]);
+  const [backendConnected, setBackendConnected] = useState(false);
   
   // Trading simulation state
   const [simulationMode, setSimulationMode] = useState(true);
@@ -50,31 +61,71 @@ const TradingTab = ({ selectedSymbol }) => {
 
   const fetchPortfolios = async () => {
     try {
-      const response = await axios.get('/trading/portfolios/user_001');
+      const response = await api.get('/trading/portfolios/user_001');
       setPortfolios(response.data.portfolios || []);
       if (response.data.portfolios?.length > 0) {
         setSelectedPortfolio(response.data.portfolios[0]);
       }
+      setBackendConnected(true);
     } catch (error) {
       console.error('خطأ في جلب المحافظ:', error);
+      setBackendConnected(false);
+      // Demo portfolios
+      const demoPortfolios = [{
+        id: 'demo-1',
+        symbol: 'BTCUSDT',
+        performance: {
+          current_balance: 1050.75,
+          total_portfolio_value: 1125.30,
+          total_return: 125.30,
+          return_percentage: 12.53,
+          success_rate: 75.5,
+          total_trades: 8,
+          successful_trades: 6
+        }
+      }];
+      setPortfolios(demoPortfolios);
+      setSelectedPortfolio(demoPortfolios[0]);
     }
   };
 
   const fetchMarketData = async () => {
     try {
-      const response = await axios.get(`/price/${selectedSymbol}`);
+      const response = await api.get(`/price/${selectedSymbol}`);
       setMarketData(response.data);
+      setBackendConnected(true);
     } catch (error) {
       console.error('خطأ في جلب بيانات السوق:', error);
+      setBackendConnected(false);
+      // Demo market data
+      setMarketData({
+        symbol: selectedSymbol,
+        price: 67350.45,
+        timestamp: Date.now() / 1000
+      });
     }
   };
 
   const fetchCoinSuggestions = async () => {
     try {
-      const response = await axios.get(`/trading/suggest-coins?risk_level=${riskLevel}&count=5`);
+      const response = await api.get(`/trading/suggest-coins?risk_level=${riskLevel}&count=5`);
       setCoinSuggestions(response.data.suggestions || []);
+      setBackendConnected(true);
     } catch (error) {
       console.error('خطأ في جلب اقتراحات العملات:', error);
+      setBackendConnected(false);
+      // Demo suggestions
+      setCoinSuggestions([
+        {
+          symbol: 'BTCUSDT',
+          recommendation: 'BUY',
+          confidence: 78.5,
+          current_price: 67350.45,
+          score: 85.2,
+          reasoning: 'تحليل فني إيجابي',
+          analysis_source: 'AI_HYBRID'
+        }
+      ]);
     }
   };
 

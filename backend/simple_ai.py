@@ -52,8 +52,9 @@ class SimpleAI:
         df['price_above_ma20'] = (df['price'] > df['ma20']).astype(int)
         
         # إزالة القيم المفقودة
-        df = df.fillna(method='bfill').fillna(method='ffill')
-        
+        # df = df.fillna(method='bfill').fillna(method='ffill')
+        df = df.bfill().ffill()
+
         return df
     
     def calculate_simple_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
