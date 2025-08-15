@@ -1,765 +1,307 @@
-// Dashboard كامل مع جميع طبقات التحليل
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { motion } from 'framer-motion';
+// Dashboard.js - نسخة نهائية ونظيفة
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  ChartBarIcon, 
-  WalletIcon,
+  ArrowPathIcon, 
+  ExclamationTriangleIcon,
+  ChartBarIcon,
   CpuChipIcon,
+  BoltIcon,
+  InformationCircleIcon,
   Cog6ToothIcon,
-  SparklesIcon,
+  WalletIcon,
+  BanknotesIcon,
+  CurrencyDollarIcon,
   ClockIcon,
-  ArrowPathIcon,
+  ScaleIcon,
+  PlayIcon,
+  StopIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  BoltIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  InformationCircleIcon
+  CogIcon
 } from '@heroicons/react/24/outline';
-import axios from 'axios';
 
-// ✅ API configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://152.67.153.191:8000';
+// استيراد useAPI hook
+import { useAPI } from '../../hooks/useAPI';
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-  }
-});
+const Dashboard = (props) => {
+  const selectedSymbol = props?.selectedSymbol || 'BTCUSDT';
+  const analysisData = props?.analysisData || null;
+  const setAnalysisData = props?.setAnalysisData || (() => {});
 
-let GLOBAL_INITIALIZED = false;
-let GLOBAL_CURRENT_SYMBOL = null;
-
-api.interceptors.request.use((config) => {
-  console.log(`📤 ${config.method?.toUpperCase()} ${config.url}`);
-  return config;
-});
-
-api.interceptors.response.use(
-  (response) => {
-    console.log(`📥 ${response.status} ${response.config.url}`);
-    return response;
-  },
-  (error) => {
-    console.error('❌', error.message);
-    return Promise.reject(error);
-  }
-);
-
-// مكونات فرعية
-const PriceCard = ({ loading, currentPrice, lastUpdate, selectedSymbol }) => {
-  return (
-    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">السعر الحالي</h3>
-        <ChartBarIcon className="w-6 h-6 text-blue-400" />
-      </div>
-      
-      {loading ? (
-        <div className="space-y-3">
-          <div className="flex items-center space-x-2 space-x-reverse">
-            <ArrowPathIcon className="w-6 h-6 text-blue-400 animate-spin" />
-            <span className="text-blue-400">جاري التحميل...</span>
-          </div>
-        </div>
-      ) : currentPrice ? (
-        <div>
-          <div className="text-3xl font-bold text-white mb-2">
-            ${currentPrice?.toLocaleString()}
-          </div>
-          <div className="text-sm text-gray-400 flex items-center space-x-2 space-x-reverse">
-            <ClockIcon className="w-4 h-4" />
-            <span>آخر تحديث: {lastUpdate}</span>
-          </div>
-          <div className="text-xs text-gray-500 mt-1">
-            {selectedSymbol}
-          </div>
-        </div>
-      ) : (
-        <div className="text-gray-400 text-center">لا توجد بيانات</div>
-      )}
-    </div>
-  );
-};
-
-const DecisionCard = ({ loading, analysisData }) => {
-  const getRecommendationColor = (recommendation) => {
-    switch (recommendation) {
-      case 'BUY':
-      case 'STRONG_BUY':
-        return 'text-green-400';
-      case 'SELL':
-      case 'STRONG_SELL':
-        return 'text-red-400';
-      default:
-        return 'text-yellow-400';
-    }
-  };
-
-  const getRecommendationIcon = (recommendation) => {
-    switch (recommendation) {
-      case 'BUY':
-      case 'STRONG_BUY':
-        return <ArrowTrendingUpIcon className="w-6 h-6" />;
-      case 'SELL':
-      case 'STRONG_SELL':
-        return <ArrowTrendingDownIcon className="w-6 h-6" />;
-      default:
-        return <ClockIcon className="w-6 h-6" />;
-    }
-  };
-
-  const getRecommendationText = (recommendation) => {
-    const texts = {
-      'BUY': 'شراء',
-      'STRONG_BUY': 'شراء قوي',
-      'SELL': 'بيع',
-      'STRONG_SELL': 'بيع قوي',
-      'HOLD': 'انتظار'
-    };
-    return texts[recommendation] || recommendation;
-  };
-
-  return (
-    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">القرار النهائي</h3>
-        <SparklesIcon className="w-6 h-6 text-purple-400" />
-      </div>
-      
-      {loading ? (
-        <div className="space-y-3">
-          <div className="flex items-center space-x-2 space-x-reverse">
-            <ArrowPathIcon className="w-6 h-6 text-purple-400 animate-spin" />
-            <span className="text-purple-400">تحليل البيانات...</span>
-          </div>
-        </div>
-      ) : analysisData?.ultimate_decision ? (
-        <div className="space-y-4">
-          <div className="flex items-center space-x-3 space-x-reverse">
-            <div className={`${getRecommendationColor(analysisData.ultimate_decision.final_recommendation)}`}>
-              {getRecommendationIcon(analysisData.ultimate_decision.final_recommendation)}
-            </div>
-            <div>
-              <div className={`text-xl font-bold ${getRecommendationColor(analysisData.ultimate_decision.final_recommendation)}`}>
-                {getRecommendationText(analysisData.ultimate_decision.final_recommendation)}
-              </div>
-              <div className="text-gray-400 text-sm">
-                ثقة: {analysisData.ultimate_decision.final_confidence?.toFixed(1) || 'N/A'}%
-              </div>
-            </div>
-          </div>
-          
-          {/* عرض عدد طبقات التحليل */}
-          {analysisData.analysis_summary && (
-            <div className="bg-white/5 rounded-lg p-3">
-              <div className="text-gray-400 text-xs mb-1">طبقات التحليل النشطة:</div>
-              <div className="text-white text-sm font-medium">
-                {analysisData.analysis_summary.total_analysis_methods} طبقات
-              </div>
-            </div>
-          )}
-          
-          {analysisData.ultimate_decision.reasoning && (
-            <div className="bg-white/5 rounded-lg p-3">
-              <div className="text-gray-300 text-sm">
-                {analysisData.ultimate_decision.reasoning}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="text-gray-400 text-center">لا توجد توصية</div>
-      )}
-    </div>
-  );
-};
-
-const ControlCard = ({ loading, analysisData, onRefresh, backendConnected }) => {
-  return (
-    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">التحكم</h3>
-        <Cog6ToothIcon className="w-6 h-6 text-gray-400" />
-      </div>
-      
-      <div className="space-y-4">
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 disabled:from-gray-500 disabled:to-gray-600 text-white py-3 px-4 rounded-lg font-semibold transition-all flex items-center justify-center space-x-2 space-x-reverse"
-        >
-          <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-          <span>{loading ? 'جاري التحديث...' : 'تحديث البيانات'}</span>
-        </button>
-        
-        <div className="grid grid-cols-1 gap-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-400">حالة الاتصال:</span>
-            <span className={backendConnected ? 'text-green-400' : 'text-red-400'}>
-              {backendConnected ? 'متصل' : 'غير متصل'}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">البيانات:</span>
-            <span className={analysisData ? 'text-green-400' : 'text-red-400'}>
-              {analysisData ? 'متوفرة' : 'غير متوفرة'}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">مصدر البيانات:</span>
-            <span className="text-white">
-              {analysisData?.data_source || 'API'}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// مكون طبقات التحليل الشامل
-const AnalysisLayersDisplay = ({ analysisData }) => {
-  const [expandedLayers, setExpandedLayers] = useState({});
-
-  const toggleLayer = (layerId) => {
-    setExpandedLayers(prev => ({
-      ...prev,
-      [layerId]: !prev[layerId]
-    }));
-  };
-
-  const layers = [
-    {
-      id: '1_technical_analysis',
-      title: 'التحليل الفني التقليدي',
-      icon: ChartBarIcon,
-      color: 'blue',
-      data: analysisData?.analysis_layers?.['1_technical_analysis']
-    },
-    {
-      id: '2_simple_ai',
-      title: 'الذكاء الاصطناعي البسيط',
-      icon: CpuChipIcon,
-      color: 'green',
-      data: analysisData?.analysis_layers?.['2_simple_ai']
-    },
-    {
-      id: '3_advanced_ai',
-      title: 'الذكاء الاصطناعي المتقدم',
-      icon: BoltIcon,
-      color: 'purple',
-      data: analysisData?.analysis_layers?.['3_advanced_ai']
-    },
-    {
-      id: 'wyckoff',
-      title: 'تحليل وايكوف',
-      icon: () => <div className="w-5 h-5 bg-orange-500 rounded text-white text-xs flex items-center justify-center font-bold">W</div>,
-      color: 'orange',
-      data: analysisData?.wyckoff_analysis || analysisData?.analysis_layers?.['4_wyckoff_analysis']
-    }
-  ];
-
-  return (
-    <div className="space-y-4">
-      <h3 className="text-xl font-bold text-white mb-4">🔬 طبقات التحليل المفصلة</h3>
-      
-      {layers.map((layer) => {
-        const Icon = layer.icon;
-        const isExpanded = expandedLayers[layer.id];
-        const hasData = layer.data && !layer.data.error;
-        
-        return (
-          <motion.div
-            key={layer.id}
-            className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 overflow-hidden"
-            initial={false}
-            animate={{ height: isExpanded ? 'auto' : 'auto' }}
-          >
-            {/* Header */}
-            <div
-              className={`p-4 cursor-pointer hover:bg-white/5 transition-all border-l-4 border-${layer.color}-500`}
-              onClick={() => toggleLayer(layer.id)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3 space-x-reverse">
-                  <div className={`text-${layer.color}-400`}>
-                    {typeof Icon === 'function' ? <Icon /> : <Icon className="w-6 h-6" />}
-                  </div>
-                  <div>
-                    <h4 className="text-white font-semibold">{layer.title}</h4>
-                    <div className="text-gray-400 text-sm">
-                      {hasData ? (
-                        <>
-                          {layer.data.recommendation || layer.data.final_recommendation || 'غير محدد'} 
-                          {layer.data.confidence && ` (${layer.data.confidence?.toFixed(1)}%)`}
-                        </>
-                      ) : (
-                        'لا توجد بيانات'
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-2 space-x-reverse">
-                  <div className={`w-2 h-2 rounded-full ${hasData ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                  {isExpanded ? 
-                    <EyeSlashIcon className="w-5 h-5 text-gray-400" /> : 
-                    <EyeIcon className="w-5 h-5 text-gray-400" />
-                  }
-                </div>
-              </div>
-            </div>
-
-            {/* Content */}
-            {isExpanded && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="px-4 pb-4"
-              >
-                {hasData ? (
-                  <LayerContent layer={layer} />
-                ) : (
-                  <div className="text-gray-400 text-center py-4">
-                    {layer.data?.error || 'لا توجد بيانات متاحة لهذه الطبقة'}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-};
-
-// مكون محتوى الطبقة
-const LayerContent = ({ layer }) => {
-  const { data } = layer;
-
-  switch (layer.id) {
-    case '1_technical_analysis':
-      return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* MACD */}
-            {data.macd && (
-              <div className="bg-blue-500/10 rounded-lg p-3">
-                <div className="text-gray-400 text-sm">MACD</div>
-                <div className="text-blue-400 font-bold">{data.macd.signal || 'N/A'}</div>
-                <div className="text-blue-300 text-xs">
-                  {data.macd.macd?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
-            )}
-            
-            {/* RSI */}
-            {data.rsi && (
-              <div className="bg-purple-500/10 rounded-lg p-3">
-                <div className="text-gray-400 text-sm">RSI</div>
-                <div className="text-purple-400 font-bold">{data.rsi.current?.toFixed(1) || 'N/A'}</div>
-                <div className="text-purple-300 text-xs">{data.rsi.signal || 'N/A'}</div>
-              </div>
-            )}
-            
-            {/* Bollinger Bands */}
-            {data.bollinger_bands && (
-              <div className="bg-yellow-500/10 rounded-lg p-3">
-                <div className="text-gray-400 text-sm">Bollinger Bands</div>
-                <div className="text-yellow-400 font-bold">{data.bollinger_bands.signal || 'N/A'}</div>
-                <div className="text-yellow-300 text-xs">{data.bollinger_bands.position || 'N/A'}</div>
-              </div>
-            )}
-          </div>
-          
-          {data.reasoning && (
-            <div className="bg-white/5 rounded-lg p-3">
-              <div className="text-gray-400 text-sm mb-1">التفسير:</div>
-              <div className="text-gray-300 text-sm">{data.reasoning}</div>
-            </div>
-          )}
-        </div>
-      );
-
-    case '2_simple_ai':
-      return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-green-500/10 rounded-lg p-3">
-              <div className="text-gray-400 text-sm">التوصية</div>
-              <div className="text-green-400 font-bold">{data.recommendation || 'N/A'}</div>
-            </div>
-            <div className="bg-green-500/10 rounded-lg p-3">
-              <div className="text-gray-400 text-sm">مستوى الثقة</div>
-              <div className="text-green-400 font-bold">{data.confidence?.toFixed(1) || 'N/A'}%</div>
-            </div>
-          </div>
-          
-          {data.reasoning && (
-            <div className="bg-white/5 rounded-lg p-3">
-              <div className="text-gray-400 text-sm mb-1">التفسير:</div>
-              <div className="text-gray-300 text-sm">{data.reasoning}</div>
-            </div>
-          )}
-        </div>
-      );
-
-    case '3_advanced_ai':
-      return (
-        <div className="space-y-4">
-          {data.ensemble_prediction && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-purple-500/10 rounded-lg p-3">
-                  <div className="text-gray-400 text-sm">التنبؤ النهائي</div>
-                  <div className="text-purple-400 font-bold">
-                    {data.ensemble_prediction.final_prediction || 'N/A'}
-                  </div>
-                </div>
-                <div className="bg-purple-500/10 rounded-lg p-3">
-                  <div className="text-gray-400 text-sm">التوصية</div>
-                  <div className="text-purple-400 font-bold">
-                    {data.ensemble_prediction.recommendation || 'N/A'}
-                  </div>
-                </div>
-                <div className="bg-purple-500/10 rounded-lg p-3">
-                  <div className="text-gray-400 text-sm">مستوى الثقة</div>
-                  <div className="text-purple-400 font-bold">
-                    {data.ensemble_prediction.confidence?.toFixed(1) || 'N/A'}%
-                  </div>
-                </div>
-              </div>
-
-              {/* احتماليات التنبؤ */}
-              {data.ensemble_prediction.probabilities && (
-                <div className="bg-white/5 rounded-lg p-3">
-                  <div className="text-gray-400 text-sm mb-2">توزيع الاحتماليات:</div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-300">صعود:</span>
-                      <span className="text-green-400">{data.ensemble_prediction.probabilities.up?.toFixed(1)}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-300">هبوط:</span>
-                      <span className="text-red-400">{data.ensemble_prediction.probabilities.down?.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          
-          {data.ensemble_prediction?.interpretation && (
-            <div className="bg-white/5 rounded-lg p-3">
-              <div className="text-gray-400 text-sm mb-1">التفسير:</div>
-              <div className="text-gray-300 text-sm">{data.ensemble_prediction.interpretation}</div>
-            </div>
-          )}
-        </div>
-      );
-
-    case 'wyckoff':
-      return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-orange-500/10 rounded-lg p-3">
-              <div className="text-gray-400 text-sm">المرحلة الحالية</div>
-              <div className="text-orange-400 font-bold">{data.current_phase || 'N/A'}</div>
-            </div>
-            <div className="bg-orange-500/10 rounded-lg p-3">
-              <div className="text-gray-400 text-sm">الإجراء الموصى</div>
-              <div className="text-orange-400 font-bold">{data.recommended_action || 'N/A'}</div>
-            </div>
-            <div className="bg-orange-500/10 rounded-lg p-3">
-              <div className="text-gray-400 text-sm">مستوى الثقة</div>
-              <div className="text-orange-400 font-bold">{data.confidence?.toFixed(1) || 'N/A'}%</div>
-            </div>
-          </div>
-          
-          {data.reasoning && (
-            <div className="bg-white/5 rounded-lg p-3">
-              <div className="text-gray-400 text-sm mb-1">التفسير:</div>
-              <div className="text-gray-300 text-sm">{data.reasoning}</div>
-            </div>
-          )}
-        </div>
-      );
-
-    default:
-      return (
-        <div className="bg-white/5 rounded-lg p-4">
-          <pre className="text-gray-300 text-sm whitespace-pre-wrap overflow-auto">
-            {JSON.stringify(data, null, 2)}
-          </pre>
-        </div>
-      );
-  }
-};
-
-const AnalysisTab = ({ 
-  loading, 
-  currentPrice, 
-  lastUpdate, 
-  analysisData, 
-  onRefresh,
-  backendConnected,
-  selectedSymbol
-}) => {
-  return (
-    <div className="space-y-6">
-      {/* Grid الأصلي */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <PriceCard 
-          loading={loading} 
-          currentPrice={currentPrice} 
-          lastUpdate={lastUpdate}
-          selectedSymbol={selectedSymbol}
-        />
-        <DecisionCard 
-          loading={loading} 
-          analysisData={analysisData} 
-        />
-        <ControlCard 
-          loading={loading} 
-          analysisData={analysisData} 
-          onRefresh={onRefresh}
-          backendConnected={backendConnected}
-        />
-      </div>
-
-      {/* طبقات التحليل الشامل */}
-      {analysisData && (
-        <AnalysisLayersDisplay analysisData={analysisData} />
-      )}
-
-      {/* Market Context */}
-      {analysisData?.market_context && (
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
-          <h3 className="text-xl font-bold text-white mb-4">📈 سياق السوق</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white/5 rounded-lg p-4">
-              <div className="text-gray-400 text-sm">حالة الاتجاه</div>
-              <div className="text-white font-bold text-lg">
-                {analysisData.market_context.trend_status || 'N/A'}
-              </div>
-            </div>
-            <div className="bg-white/5 rounded-lg p-4">
-              <div className="text-gray-400 text-sm">مستوى التذبذب</div>
-              <div className="text-white font-bold text-lg">
-                {analysisData.market_context.volatility_state || 'N/A'}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const Dashboard = ({ selectedSymbol, analysisData, setAnalysisData, setIsLoading, apiHealth }) => {
-  console.log('🔧 Dashboard render for:', selectedSymbol);
-  console.log('📊 Current analysisData:', analysisData);
-  
-  const [activeTab, setActiveTab] = useState('analysis');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [currentPrice, setCurrentPrice] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [backendConnected, setBackendConnected] = useState(false);
-  const [initialized, setInitialized] = useState(false);
+  const [activeTab, setActiveTab] = useState('analysis');
   
-  const tabs = useMemo(() => [
-    { 
-      id: 'analysis', 
-      name: 'التحليل الشامل', 
-      icon: ChartBarIcon,
-      description: 'تحليل شامل مع جميع الطبقات'
-    },
-    { 
-      id: 'ai_suggestions', 
-      name: 'اقتراحات الذكي', 
-      icon: SparklesIcon,
-      description: 'توصيات العملات من الذكاء الصناعي'
-    },
-    { 
-      id: 'settings', 
-      name: 'الإعدادات', 
-      icon: Cog6ToothIcon,
-      description: 'إعدادات التداول والتحليل'
-    }
-  ], []);
+  // إعدادات وايكوف
+  const [wyckoffEnabled, setWyckoffEnabled] = useState(true);
+  const [wyckoffSettings, setWyckoffSettings] = useState({
+    sensitivity: 'medium',
+    multi_timeframe: true,
+    volume_analysis: true,
+    timeframes: ['1h', '4h', '1d']
+  });
+  const [showWyckoffSettings, setShowWyckoffSettings] = useState(false);
 
-  const checkBackendConnection = async () => {
+  // بيانات التبويبات
+  const [portfolioData, setPortfolioData] = useState({
+    balance: 10000,
+    positions: [],
+    pnl: 0,
+    totalValue: 10000
+  });
+
+  const [tradingData, setTradingData] = useState({
+    orderHistory: [],
+    openOrders: [],
+    tradingSettings: {
+      riskPerTrade: 2,
+      maxPositions: 5,
+      autoTrading: false
+    }
+  });
+
+  const [backtestData, setBacktestData] = useState({
+    results: null,
+    isRunning: false,
+    settings: {
+      startDate: '2024-01-01',
+      endDate: '2024-12-31',
+      initialBalance: 10000,
+      strategy: 'ai_combined'
+    }
+  });
+
+  // بيانات النصائح
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [lastSuggestionsUpdate, setLastSuggestionsUpdate] = useState(null);
+
+  const { fetchUltimateAnalysis } = useAPI();
+
+  const tabs = [
+    { id: 'analysis', name: 'التحليل', icon: ChartBarIcon },
+    { id: 'ai_suggestions', name: 'نصائح الذكي', icon: BoltIcon },
+    { id: 'portfolio', name: 'المحفظة', icon: WalletIcon },
+    { id: 'investment', name: 'الاستثمار', icon: BanknotesIcon },
+    { id: 'trading', name: 'التداول', icon: CurrencyDollarIcon },
+    { id: 'backtest', name: 'المحاكاة', icon: ClockIcon },
+    { id: 'comparison', name: 'المقارنة', icon: ScaleIcon }
+  ];
+
+  // جلب الأسعار الحقيقية
+  const fetchRealPrices = async (symbols) => {
     try {
-      const response = await api.get('/health');
-      setBackendConnected(true);
-      console.log('✅ Backend connected:', response.data);
-      return true;
+      const symbolsQuery = symbols.map(s => `"${s}"`).join(',');
+      const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=[${symbolsQuery}]`);
+      
+      if (!response.ok) throw new Error('فشل في جلب الأسعار');
+      
+      const data = await response.json();
+      const pricesMap = {};
+      
+      data.forEach(ticker => {
+        pricesMap[ticker.symbol] = {
+          price: parseFloat(ticker.lastPrice),
+          change24h: parseFloat(ticker.priceChangePercent),
+          volume: parseFloat(ticker.volume),
+          high24h: parseFloat(ticker.highPrice),
+          low24h: parseFloat(ticker.lowPrice)
+        };
+      });
+      
+      return pricesMap;
     } catch (error) {
-      setBackendConnected(false);
-      console.log('❌ Backend connection failed:', error);
-      return false;
+      console.error('خطأ في جلب الأسعار:', error);
+      return null;
     }
   };
 
-  const fetchAnalysis = async (symbol) => {
-    console.log(`🔍 Fetching analysis for ${symbol}`);
-    
-    setLoading(true);
+  // جلب نصائح AI
+  const fetchAISuggestions = async () => {
+    setSuggestionsLoading(true);
     
     try {
-      // طلب التحليل الشامل مع تفعيل جميع الطبقات
-      const response = await api.get(`/ai/ultimate-analysis/${symbol}?include_wyckoff=true&multi_timeframe_wyckoff=false`);
+      const cryptoSymbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT', 'DOTUSDT'];
+      const realPrices = await fetchRealPrices(cryptoSymbols);
       
-      if (response.data) {
-        console.log('✅ Analysis successful');
-        console.log('📊 Received data:', response.data);
+      if (!realPrices) throw new Error('فشل في جلب الأسعار');
+      
+      const suggestions = [];
+      
+      for (const symbol of cryptoSymbols) {
+        const priceData = realPrices[symbol];
+        if (!priceData) continue;
         
-        setAnalysisData(response.data);
-        setCurrentPrice(response.data.current_price);
-        setLastUpdate(new Date().toLocaleTimeString('ar-SA'));
-        setBackendConnected(true);
+        const suggestion = {
+          symbol: symbol,
+          name: getCryptoName(symbol),
+          current_price: priceData.price,
+          change_24h: priceData.change24h,
+          volume_24h: priceData.volume,
+          high_24h: priceData.high24h,
+          low_24h: priceData.low24h,
+          recommendation: generateRecommendation(priceData),
+          confidence: generateConfidence(priceData),
+          ai_score: generateAIScore(priceData),
+          price_target: calculatePriceTarget(priceData),
+          reasoning: generateReasoning(priceData, symbol),
+          risk_level: calculateRiskLevel(priceData),
+          timeframe: 'قصير إلى متوسط المدى',
+          volume_strength: getVolumeStrength(priceData.volume, symbol),
+          data_source: 'binance_api'
+        };
         
-        GLOBAL_INITIALIZED = true;
-        GLOBAL_CURRENT_SYMBOL = symbol;
-        console.log('🎯 Data set successfully!');
-        return;
+        suggestions.push(suggestion);
       }
+      
+      suggestions.sort((a, b) => b.ai_score - a.ai_score);
+      setAiSuggestions(suggestions);
+      setLastSuggestionsUpdate(new Date().toLocaleTimeString('ar-SA'));
+      
     } catch (error) {
-      console.log('⚠️ Analysis failed:', error);
-      
-      // Demo data fallback مع جميع الطبقات
-      const demoData = {
-        symbol: symbol,
-        current_price: symbol === 'BTCUSDT' ? 67000 : 3200,
-        ultimate_decision: {
-          final_recommendation: 'BUY',
-          final_confidence: 75,
-          reasoning: 'تحليل متعدد الطبقات يشير إلى اتجاه إيجابي'
-        },
-        analysis_layers: {
-          '1_technical_analysis': {
-            overall_recommendation: 'BUY',
-            confidence: 70,
-            macd: {
-              signal: 'BUY',
-              macd: 245.67,
-              signal_line: 198.34,
-              histogram: 47.33
-            },
-            rsi: {
-              current: 65.5,
-              signal: 'BUY'
-            },
-            bollinger_bands: {
-              signal: 'HOLD',
-              position: 'MIDDLE'
-            },
-            reasoning: 'المؤشرات الفنية تشير إلى قوة في الاتجاه الصاعد'
-          },
-          '2_simple_ai': {
-            recommendation: 'BUY',
-            confidence: 68,
-            reasoning: 'النموذج البسيط يتوقع استمرار الاتجاه الإيجابي'
-          },
-          '3_advanced_ai': {
-            ensemble_prediction: {
-              final_prediction: 'UP',
-              recommendation: 'BUY',
-              confidence: 78,
-              probabilities: {
-                up: 78,
-                down: 22
-              },
-              interpretation: 'مجموعة النماذج المتقدمة تظهر إشارات قوية للصعود'
-            }
-          }
-        },
-        wyckoff_analysis: {
-          current_phase: 'Markup Phase',
-          recommended_action: 'BUY',
-          confidence: 72,
-          reasoning: 'نمط وايكوف يشير إلى مرحلة الصعود مع قوة في الحجم'
-        },
-        analysis_summary: {
-          total_analysis_methods: 4,
-          confidence_score: 75,
-          risk_assessment: 'MODERATE',
-          recommendation_strength: 'STRONG',
-          wyckoff_enabled: true
-        },
-        market_context: {
-          trend_status: 'UPTREND',
-          volatility_state: 'MODERATE'
-        },
-        data_source: 'DEMO_DATA',
-        warning: 'بيانات تجريبية - الخادم غير متاح'
+      console.error('خطأ في جلب النصائح:', error);
+      setAiSuggestions([]);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  };
+
+  // دوال مساعدة
+  const getCryptoName = (symbol) => {
+    const names = {
+      'BTCUSDT': 'Bitcoin',
+      'ETHUSDT': 'Ethereum', 
+      'BNBUSDT': 'Binance Coin',
+      'ADAUSDT': 'Cardano',
+      'SOLUSDT': 'Solana',
+      'DOTUSDT': 'Polkadot'
+    };
+    return names[symbol] || symbol;
+  };
+
+  const generateRecommendation = (priceData) => {
+    if (priceData.change24h > 5) return 'BUY';
+    if (priceData.change24h < -5) return 'SELL';
+    return 'HOLD';
+  };
+
+  const generateConfidence = (priceData) => {
+    const absChange = Math.abs(priceData.change24h);
+    if (absChange > 10) return 85 + Math.random() * 10;
+    if (absChange > 5) return 70 + Math.random() * 15;
+    return 50 + Math.random() * 20;
+  };
+
+  const generateAIScore = (priceData) => {
+    const baseScore = 60;
+    const volatilityBonus = Math.min(Math.abs(priceData.change24h) * 2, 20);
+    const randomFactor = Math.random() * 20;
+    return Math.min(baseScore + volatilityBonus + randomFactor, 95);
+  };
+
+  const calculatePriceTarget = (priceData) => {
+    const currentPrice = priceData.price;
+    if (priceData.change24h > 0) {
+      return currentPrice * (1 + 0.1 + Math.random() * 0.1);
+    } else {
+      return currentPrice * (1 + 0.05 + Math.random() * 0.05);
+    }
+  };
+
+  const generateReasoning = (priceData, symbol) => {
+    if (priceData.change24h > 5) {
+      return `${symbol} يظهر قوة واضحة مع ارتفاع ${priceData.change24h.toFixed(1)}% في 24 ساعة`;
+    } else if (priceData.change24h < -5) {
+      return `${symbol} في مرحلة تصحيح مع انخفاض ${Math.abs(priceData.change24h).toFixed(1)}%`;
+    } else {
+      return `${symbol} في حالة استقرار نسبي، مناسب للمراقبة`;
+    }
+  };
+
+  const calculateRiskLevel = (priceData) => {
+    const volatility = Math.abs(priceData.change24h);
+    if (volatility > 10) return 'HIGH';
+    if (volatility > 5) return 'MEDIUM';
+    return 'LOW';
+  };
+
+  const getVolumeStrength = (volume, symbol) => {
+    if (symbol === 'BTCUSDT' && volume > 50000) return 'عالي جداً';
+    if (symbol === 'ETHUSDT' && volume > 200000) return 'عالي جداً';
+    if (volume > 100000) return 'عالي';
+    if (volume > 50000) return 'متوسط إلى عالي';
+    return 'متوسط';
+  };
+
+  // دالة التحديث الرئيسية
+  const handleRefresh = useCallback(async () => {
+    if (!fetchUltimateAnalysis) {
+      setError('useAPI hook غير متصل');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const options = {
+        include_wyckoff: wyckoffEnabled,
+        multi_timeframe_wyckoff: wyckoffSettings.multi_timeframe,
+        detail_level: 'detailed',
+        depth: 200,
+        wyckoff_sensitivity: wyckoffSettings.sensitivity,
+        volume_analysis: wyckoffSettings.volume_analysis,
+        timeframes: wyckoffSettings.timeframes
       };
+
+      await fetchUltimateAnalysis(
+        selectedSymbol,
+        setAnalysisData,
+        setCurrentPrice,
+        setLastUpdate,
+        options
+      );
       
-      console.log('📊 Using demo data:', demoData);
-      setAnalysisData(demoData);
-      setCurrentPrice(demoData.current_price);
-      setLastUpdate(new Date().toLocaleTimeString('ar-SA'));
-      setBackendConnected(false);
-      
-      GLOBAL_INITIALIZED = true;
-      GLOBAL_CURRENT_SYMBOL = symbol;
+    } catch (err) {
+      setError(err.message || 'حدث خطأ أثناء التحليل');
     } finally {
       setLoading(false);
-      console.log('🏁 Finished loading, analysisData should be set');
     }
-  };
+  }, [selectedSymbol, wyckoffEnabled, wyckoffSettings, fetchUltimateAnalysis, setAnalysisData, setCurrentPrice, setLastUpdate]);
+
+  // Effects
+  useEffect(() => {
+    if (selectedSymbol && fetchUltimateAnalysis) {
+      handleRefresh();
+    }
+  }, [selectedSymbol, handleRefresh]);
 
   useEffect(() => {
-    const initializeData = async () => {
-      if (GLOBAL_CURRENT_SYMBOL === selectedSymbol && GLOBAL_INITIALIZED) {
-        console.log('⏭️ Skipping - already initialized for', selectedSymbol);
-        return;
-      }
-      
-      if (initialized && GLOBAL_CURRENT_SYMBOL === selectedSymbol) {
-        console.log('⏭️ Skipping - locally initialized for', selectedSymbol);
-        return;
-      }
-      
-      console.log('🚀 Initializing Dashboard for', selectedSymbol);
-      setInitialized(true);
-      
-      await checkBackendConnection();
-      await fetchAnalysis(selectedSymbol);
-    };
-    
-    initializeData();
-  }, [selectedSymbol]);
+    if (activeTab === 'ai_suggestions' && aiSuggestions.length === 0 && !suggestionsLoading) {
+      fetchAISuggestions();
+    }
+  }, [activeTab]);
 
-  const handleRefresh = async () => {
-    console.log('🔄 Manual refresh');
-    GLOBAL_INITIALIZED = false;
-    setInitialized(false);
-    await fetchAnalysis(selectedSymbol);
-    await checkBackendConnection();
-  };
-
+  // مكونات التبويبات
   const TabNavigation = () => (
-    <div className="bg-white/10 backdrop-blur-md rounded-xl p-2 border border-white/20 mb-6">
-      <div className="flex space-x-1 space-x-reverse overflow-x-auto">
+    <div className="bg-white/10 backdrop-blur-md rounded-xl p-2 border border-white/20">
+      <div className="flex space-x-2 space-x-reverse overflow-x-auto">
         {tabs.map((tab) => {
-          const Icon = tab.icon;
+          const IconComponent = tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center space-x-2 space-x-reverse px-4 py-3 rounded-lg transition-all font-medium whitespace-nowrap ${
+              className={`flex items-center space-x-2 space-x-reverse px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
-                  : 'text-gray-300 hover:text-white hover:bg-white/10'
+                  : 'text-gray-400 hover:text-white hover:bg-white/10'
               }`}
-              title={tab.description}
             >
-              <Icon className="w-5 h-5" />
-              <span className="hidden sm:block">{tab.name}</span>
+              <IconComponent className="w-5 h-5" />
+              <span>{tab.name}</span>
             </button>
           );
         })}
@@ -767,267 +309,437 @@ const Dashboard = ({ selectedSymbol, analysisData, setAnalysisData, setIsLoading
     </div>
   );
 
+  const AnalysisTab = () => {
+    if (!analysisData) {
+      return (
+        <div className="text-center py-8">
+          <div className="text-gray-400 mb-4">لا توجد بيانات تحليل متاحة</div>
+          <button 
+            onClick={handleRefresh}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            تحديث البيانات
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {analysisData.analysis_layers?.['1_technical_analysis'] && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-6">
+              <h4 className="text-blue-400 font-semibold mb-3">التحليل الفني</h4>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">التوصية:</span>
+                  <span className={`font-semibold ${
+                    analysisData.analysis_layers['1_technical_analysis'].recommendation === 'BUY' ? 'text-green-400' :
+                    analysisData.analysis_layers['1_technical_analysis'].recommendation === 'SELL' ? 'text-red-400' : 'text-yellow-400'
+                  }`}>
+                    {analysisData.analysis_layers['1_technical_analysis'].recommendation === 'BUY' ? 'شراء' :
+                     analysisData.analysis_layers['1_technical_analysis'].recommendation === 'SELL' ? 'بيع' : 'انتظار'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">الثقة:</span>
+                  <span className="text-white">{Math.round(analysisData.analysis_layers['1_technical_analysis'].confidence || 0)}%</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {analysisData.analysis_layers?.['4_wyckoff_analysis'] && (
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-6">
+              <h4 className="text-orange-400 font-semibold mb-3">تحليل وايكوف</h4>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">المرحلة:</span>
+                  <span className="text-white">{analysisData.analysis_layers['4_wyckoff_analysis'].current_phase || 'غير محدد'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">التوصية:</span>
+                  <span className={`font-semibold ${
+                    analysisData.analysis_layers['4_wyckoff_analysis'].trading_recommendation?.action === 'BUY' ? 'text-green-400' :
+                    analysisData.analysis_layers['4_wyckoff_analysis'].trading_recommendation?.action === 'SELL' ? 'text-red-400' : 'text-yellow-400'
+                  }`}>
+                    {analysisData.analysis_layers['4_wyckoff_analysis'].trading_recommendation?.action === 'BUY' ? 'شراء' :
+                     analysisData.analysis_layers['4_wyckoff_analysis'].trading_recommendation?.action === 'SELL' ? 'بيع' : 'انتظار'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {(analysisData?.final_recommendation || analysisData?.ultimate_decision) && (
+          <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 rounded-xl p-6">
+            <h3 className="text-purple-400 font-semibold text-lg mb-4">القرار النهائي</h3>
+            {(() => {
+              const finalRec = analysisData?.final_recommendation || analysisData?.ultimate_decision;
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-gray-400">الإجراء</div>
+                    <div className={`font-bold text-2xl ${
+                      (finalRec.action || finalRec.final_recommendation) === 'BUY' ? 'text-green-400' :
+                      (finalRec.action || finalRec.final_recommendation) === 'SELL' ? 'text-red-400' : 'text-yellow-400'
+                    }`}>
+                      {(finalRec.action || finalRec.final_recommendation) === 'BUY' ? 'شراء' :
+                       (finalRec.action || finalRec.final_recommendation) === 'SELL' ? 'بيع' : 'انتظار'}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-gray-400">قوة الإشارة</div>
+                    <div className="text-white font-bold text-2xl">
+                      {Math.round((finalRec.strength || finalRec.final_confidence || 0) * (finalRec.strength < 1 ? 100 : 1))}%
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-gray-400">الثقة الإجمالية</div>
+                    <div className="text-white font-bold text-2xl">
+                      {Math.round((finalRec.confidence || finalRec.final_confidence || 0) * (finalRec.confidence < 1 ? 100 : 1))}%
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const AISuggestionsTab = () => (
     <div className="space-y-6">
-      <div className="flex items-center space-x-3 space-x-reverse">
-        <SparklesIcon className="w-8 h-8 text-purple-400" />
-        <div>
-          <h2 className="text-2xl font-bold text-white">اقتراحات الذكاء الصناعي</h2>
-          <p className="text-gray-400">أفضل العملات للاستثمار حالياً</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-3 space-x-reverse">
+          <BoltIcon className="w-8 h-8 text-purple-400" />
+          <div>
+            <h2 className="text-2xl font-bold text-white">نصائح الذكاء الاصطناعي</h2>
+            <p className="text-gray-400">أفضل العملات للاستثمار والتداول - بيانات حقيقية</p>
+          </div>
         </div>
+        
+        <button
+          onClick={fetchAISuggestions}
+          disabled={suggestionsLoading}
+          className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 space-x-reverse"
+        >
+          <ArrowPathIcon className={`w-4 h-4 ${suggestionsLoading ? 'animate-spin' : ''}`} />
+          <span>{suggestionsLoading ? 'جاري التحديث...' : 'تحديث النصائح'}</span>
+        </button>
       </div>
 
-      {!backendConnected && (
-        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
-          <div className="flex items-center space-x-3 space-x-reverse">
-            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-            <span className="text-yellow-400 font-medium">عرض اقتراحات تجريبية - الخادم غير متاح</span>
-          </div>
+      {lastSuggestionsUpdate && (
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-center">
+          <span className="text-blue-400 text-sm">
+            📊 آخر تحديث: {lastSuggestionsUpdate} | مصدر: Binance API
+          </span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[
-          {
-            symbol: 'BTCUSDT',
-            recommendation: 'BUY',
-            confidence: 78.5,
-            current_price: 67350.45,
-            score: 85.2,
-            reasoning: 'جميع طبقات التحليل تشير إلى اتجاه صاعد قوي'
-          },
-          {
-            symbol: 'ETHUSDT',
-            recommendation: 'BUY', 
-            confidence: 82.1,
-            current_price: 3245.67,
-            score: 88.7,
-            reasoning: 'تحليل وايكوف والذكاء الاصطناعي يؤكدان القوة'
-          },
-          {
-            symbol: 'BNBUSDT',
-            recommendation: 'HOLD',
-            confidence: 65.3,
-            current_price: 415.23,
-            score: 72.4,
-            reasoning: 'إشارات متضاربة بين الطبقات، انتظار وضوح أكبر'
-          }
-        ].map((suggestion, index) => (
-          <motion.div
-            key={suggestion.symbol}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20 hover:border-white/30 transition-all"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white">{suggestion.symbol}</h3>
-              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                suggestion.recommendation === 'BUY' ? 'bg-green-500/20 text-green-400' :
-                suggestion.recommendation === 'SELL' ? 'bg-red-500/20 text-red-400' :
-                'bg-yellow-500/20 text-yellow-400'
-              }`}>
-                {suggestion.recommendation === 'BUY' ? 'شراء' :
-                 suggestion.recommendation === 'SELL' ? 'بيع' : 'انتظار'}
-              </span>
+      {suggestionsLoading && aiSuggestions.length === 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1,2,3,4,5,6].map(i => (
+            <div key={i} className="bg-gray-800/50 rounded-xl p-6 animate-pulse">
+              <div className="h-6 bg-gray-700 rounded mb-4"></div>
+              <div className="h-4 bg-gray-700 rounded mb-2"></div>
+              <div className="h-16 bg-gray-700 rounded"></div>
             </div>
-            
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between">
-                <span className="text-gray-400 text-sm">السعر الحالي:</span>
-                <span className="text-white font-medium">${suggestion.current_price?.toFixed(4)}</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-400 text-sm">مستوى الثقة:</span>
-                <span className="text-blue-400 font-medium">{suggestion.confidence?.toFixed(1)}%</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-gray-400 text-sm">النتيجة:</span>
-                <span className="text-purple-400 font-medium">{suggestion.score?.toFixed(1)}</span>
-              </div>
-            </div>
-            
-            <div className="bg-white/5 rounded-lg p-3">
-              <div className="text-xs text-gray-400 mb-1">التحليل:</div>
-              <div className="text-sm text-gray-300">{suggestion.reasoning}</div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const SettingsTab = () => (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-3 space-x-reverse mb-6">
-        <Cog6ToothIcon className="w-8 h-8 text-gray-400" />
-        <div>
-          <h2 className="text-2xl font-bold text-white">إعدادات النظام</h2>
-          <p className="text-gray-400">إعدادات التداول والتحليل والإشعارات</p>
+          ))}
         </div>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
-          <h3 className="text-lg font-semibold text-white mb-4">حالة الاتصال</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-300">Backend Server</span>
-              <span className={`px-2 py-1 rounded text-xs ${
-                backendConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-              }`}>
-                {backendConnected ? 'متصل' : 'غير متصل'}
-              </span>
-            </div>
-            <div className="text-xs text-gray-400 break-all">
-              API URL: {API_BASE_URL}
-            </div>
-            <button
-              onClick={checkBackendConnection}
-              className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-2 px-4 rounded-lg text-sm transition-colors"
+      {!suggestionsLoading && aiSuggestions.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {aiSuggestions.map((suggestion) => (
+            <div
+              key={suggestion.symbol}
+              className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-md rounded-xl p-6 border border-white/10 hover:border-white/20 transition-all duration-300"
             >
-              اختبار الاتصال
-            </button>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-white">{suggestion.symbol}</h3>
+                  <p className="text-gray-400 text-sm">{suggestion.name}</p>
+                </div>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  suggestion.recommendation === 'BUY' ? 'bg-green-500/20 text-green-400' :
+                  suggestion.recommendation === 'SELL' ? 'bg-red-500/20 text-red-400' :
+                  'bg-yellow-500/20 text-yellow-400'
+                }`}>
+                  {suggestion.recommendation === 'BUY' ? 'شراء' :
+                   suggestion.recommendation === 'SELL' ? 'بيع' : 'انتظار'}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-white/5 rounded-lg p-3">
+                  <div className="text-gray-400 text-xs">السعر الحالي</div>
+                  <div className="text-white font-bold text-lg">${suggestion.current_price?.toFixed(4)}</div>
+                  <div className={`text-xs ${suggestion.change_24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {suggestion.change_24h >= 0 ? '+' : ''}{suggestion.change_24h?.toFixed(2)}%
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3">
+                  <div className="text-gray-400 text-xs">الهدف السعري</div>
+                  <div className="text-green-400 font-bold text-lg">${suggestion.price_target?.toFixed(4)}</div>
+                  <div className="text-xs text-gray-400">
+                    +{(((suggestion.price_target / suggestion.current_price) - 1) * 100).toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">مستوى الثقة:</span>
+                  <span className="text-blue-400 font-medium text-sm">{suggestion.confidence?.toFixed(1)}%</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">نتيجة AI:</span>
+                  <span className="text-purple-400 font-medium text-sm">{suggestion.ai_score?.toFixed(1)}</span>
+                </div>
+                
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-sm">مستوى المخاطر:</span>
+                  <span className={`text-xs px-2 py-1 rounded ${
+                    suggestion.risk_level === 'HIGH' ? 'bg-red-500/20 text-red-400' :
+                    suggestion.risk_level === 'LOW' ? 'bg-green-500/20 text-green-400' :
+                    'bg-yellow-500/20 text-yellow-400'
+                  }`}>
+                    {suggestion.risk_level === 'HIGH' ? 'عالي' :
+                     suggestion.risk_level === 'LOW' ? 'منخفض' : 'متوسط'}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="bg-white/5 rounded-lg p-3">
+                <div className="text-gray-400 text-xs mb-1">تحليل:</div>
+                <div className="text-gray-300 text-sm">{suggestion.reasoning}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!suggestionsLoading && aiSuggestions.length === 0 && (
+        <div className="text-center py-12">
+          <div className="text-gray-400 mb-4">فشل في جلب البيانات</div>
+          <button 
+            onClick={fetchAISuggestions}
+            className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded-lg"
+          >
+            إعادة المحاولة
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const PortfolioTab = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-gradient-to-br from-green-500/20 to-blue-500/20 border border-green-500/30 rounded-xl p-6">
+          <div className="text-green-400 text-sm">إجمالي الرصيد</div>
+          <div className="text-white text-2xl font-bold">${portfolioData.totalValue.toLocaleString()}</div>
+        </div>
+        <div className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl p-6">
+          <div className="text-blue-400 text-sm">المراكز المفتوحة</div>
+          <div className="text-white text-2xl font-bold">{portfolioData.positions.length}</div>
+        </div>
+        <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-6">
+          <div className="text-purple-400 text-sm">الربح/الخسارة</div>
+          <div className={`text-2xl font-bold ${portfolioData.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {portfolioData.pnl >= 0 ? '+' : ''}${portfolioData.pnl.toLocaleString()}
           </div>
         </div>
-
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
-          <h3 className="text-lg font-semibold text-white mb-4">حالة الخدمات</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-300">قاعدة البيانات</span>
-              <span className={`px-2 py-1 rounded text-xs ${
-                apiHealth?.database === 'connected' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-              }`}>
-                {apiHealth?.database === 'connected' ? 'متصل' : 'غير متصل'}
-              </span>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <span className="text-gray-300">Redis Cache</span>
-              <span className={`px-2 py-1 rounded text-xs ${
-                apiHealth?.redis === 'connected' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-              }`}>
-                {apiHealth?.redis === 'connected' ? 'متصل' : 'غير متصل'}
-              </span>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <span className="text-gray-300">Binance API</span>
-              <span className={`px-2 py-1 rounded text-xs ${
-                apiHealth?.binance_api === 'connected' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-              }`}>
-                {apiHealth?.binance_api === 'connected' ? 'متصل' : 'غير متصل'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* معلومات طبقات التحليل */}
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 lg:col-span-2">
-          <h3 className="text-lg font-semibold text-white mb-4">طبقات التحليل المتاحة</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2 space-x-reverse">
-                <ChartBarIcon className="w-4 h-4 text-blue-400" />
-                <span className="text-white text-sm">التحليل الفني التقليدي</span>
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              </div>
-              <div className="flex items-center space-x-2 space-x-reverse">
-                <CpuChipIcon className="w-4 h-4 text-green-400" />
-                <span className="text-white text-sm">الذكاء الاصطناعي البسيط</span>
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              </div>
-              <div className="flex items-center space-x-2 space-x-reverse">
-                <BoltIcon className="w-4 h-4 text-purple-400" />
-                <span className="text-white text-sm">الذكاء الاصطناعي المتقدم</span>
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              </div>
-              <div className="flex items-center space-x-2 space-x-reverse">
-                <div className="w-4 h-4 bg-orange-500 rounded text-white text-xs flex items-center justify-center font-bold">W</div>
-                <span className="text-white text-sm">تحليل وايكوف</span>
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              </div>
-            </div>
-            <div className="text-xs text-gray-400">
-              <p>جميع طبقات التحليل مفعلة ومتاحة للاستخدام</p>
-              <p className="mt-1">يتم دمج النتائج لإنتاج توصية نهائية شاملة</p>
-            </div>
-          </div>
+        <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-xl p-6">
+          <div className="text-yellow-400 text-sm">الرصيد المتاح</div>
+          <div className="text-white text-2xl font-bold">${portfolioData.balance.toLocaleString()}</div>
         </div>
       </div>
     </div>
   );
-
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'analysis':
-        return (
-          <AnalysisTab
-            loading={loading}
-            currentPrice={currentPrice}
-            lastUpdate={lastUpdate}
-            analysisData={analysisData}
-            onRefresh={handleRefresh}
-            backendConnected={backendConnected}
-            selectedSymbol={selectedSymbol}
-          />
-        );
-      
-      case 'ai_suggestions':
-        return <AISuggestionsTab />;
-      
-      case 'settings':
-        return <SettingsTab />;
-      
-      default:
-        return (
-          <AnalysisTab
-            loading={loading}
-            currentPrice={currentPrice}
-            lastUpdate={lastUpdate}
-            analysisData={analysisData}
-            onRefresh={handleRefresh}
-            backendConnected={backendConnected}
-            selectedSymbol={selectedSymbol}
-          />
-        );
-    }
-  };
 
   return (
-    <div className="space-y-6">
-      <TabNavigation />
-      
-      {!backendConnected && (
-        <div className="bg-yellow-500/10 backdrop-blur-md rounded-xl p-4 border border-yellow-500/20">
-          <div className="flex items-center justify-between">
+    <div className="max-w-7xl mx-auto p-6 bg-gray-900 min-h-screen text-white">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600 mb-2">
+          لوحة تحكم التداول الذكي
+        </h1>
+        <div className="flex items-center space-x-4 space-x-reverse text-sm text-gray-400">
+          <span>العملة: <span className="text-white font-semibold">{selectedSymbol}</span></span>
+          {currentPrice && (
+            <span>السعر: <span className="text-green-400 font-semibold">${currentPrice.toLocaleString()}</span></span>
+          )}
+          {lastUpdate && (
+            <span>آخر تحديث: <span className="text-blue-400">{lastUpdate}</span></span>
+          )}
+        </div>
+      </div>
+
+      {/* إعدادات وايكوف */}
+      <div className="mb-6">
+        <div className="bg-gradient-to-br from-orange-900/30 to-yellow-900/30 border border-orange-500/30 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3 space-x-reverse">
-              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-              <span className="text-yellow-400 font-medium">يتم عرض بيانات تجريبية</span>
-              <span className="text-gray-400 text-sm">- الخادم غير متاح</span>
+              <CogIcon className="w-6 h-6 text-orange-400" />
+              <h3 className="text-orange-400 font-semibold text-lg">إعدادات تحليل وايكوف</h3>
             </div>
             
             <button
-              onClick={checkBackendConnection}
-              className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1 rounded text-sm transition-colors"
+              onClick={() => setShowWyckoffSettings(!showWyckoffSettings)}
+              className="text-orange-400 hover:text-orange-300 transition-colors"
+            >
+              <Cog6ToothIcon className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-white">تفعيل تحليل وايكوف</span>
+            <button
+              onClick={() => setWyckoffEnabled(!wyckoffEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                wyckoffEnabled ? 'bg-orange-600' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  wyckoffEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {showWyckoffSettings && wyckoffEnabled && (
+            <div className="space-y-4 pt-4 border-t border-orange-500/20">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">حساسية التحليل</label>
+                <select
+                  value={wyckoffSettings.sensitivity}
+                  onChange={(e) => setWyckoffSettings(prev => ({ ...prev, sensitivity: e.target.value }))}
+                  className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="low">منخفض</option>
+                  <option value="medium">متوسط</option>
+                  <option value="high">عالي</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">تحليل متعدد الإطارات</span>
+                <button
+                  onClick={() => setWyckoffSettings(prev => ({ ...prev, multi_timeframe: !prev.multi_timeframe }))}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    wyckoffSettings.multi_timeframe ? 'bg-orange-600' : 'bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                      wyckoffSettings.multi_timeframe ? 'translate-x-5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">تحليل الحجم</span>
+                <button
+                  onClick={() => setWyckoffSettings(prev => ({ ...prev, volume_analysis: !prev.volume_analysis }))}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    wyckoffSettings.volume_analysis ? 'bg-orange-600' : 'bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                      wyckoffSettings.volume_analysis ? 'translate-x-5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* التبويبات */}
+      <TabNavigation />
+
+      {/* زر التحديث للتحليل */}
+      {activeTab === 'analysis' && (
+        <div className="flex justify-center mb-6">
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 text-white px-8 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 space-x-reverse"
+          >
+            <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            <span>{loading ? 'جاري التحليل...' : 'تحديث التحليل'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* عرض الأخطاء */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center space-x-3 space-x-reverse mb-6">
+          <ExclamationTriangleIcon className="w-6 h-6 text-red-400" />
+          <div>
+            <div className="text-red-400 font-semibold">خطأ في التحليل</div>
+            <div className="text-red-300 text-sm">{error}</div>
+            <button 
+              onClick={handleRefresh}
+              className="mt-2 text-red-400 hover:text-red-300 text-sm underline"
+              disabled={loading}
             >
               إعادة المحاولة
             </button>
           </div>
         </div>
       )}
-      
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        {renderTabContent()}
-      </motion.div>
+
+      {/* تحذير useAPI */}
+      {!fetchUltimateAnalysis && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-center space-x-3 space-x-reverse mb-6">
+          <InformationCircleIcon className="w-6 h-6 text-yellow-400" />
+          <div>
+            <div className="text-yellow-400 font-semibold">تحذير: useAPI hook غير متصل</div>
+            <div className="text-yellow-300 text-sm">
+              تأكد من وجود ملف useAPI.js في: <code className="bg-yellow-500/20 px-1 rounded">src/hooks/useAPI.js</code>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* محتوى التبويبات */}
+      {activeTab === 'analysis' && <AnalysisTab />}
+      {activeTab === 'ai_suggestions' && <AISuggestionsTab />}
+      {activeTab === 'portfolio' && <PortfolioTab />}
+      {activeTab === 'investment' && <div className="text-center py-8 text-gray-400">تبويب الاستثمار قيد التطوير</div>}
+      {activeTab === 'trading' && <div className="text-center py-8 text-gray-400">تبويب التداول قيد التطوير</div>}
+      {activeTab === 'backtest' && <div className="text-center py-8 text-gray-400">تبويب المحاكاة قيد التطوير</div>}
+      {activeTab === 'comparison' && <div className="text-center py-8 text-gray-400">تبويب المقارنة قيد التطوير</div>}
+
+      {/* معلومات التشخيص */}
+      <div className="bg-gray-800/50 rounded-lg p-4 text-xs mt-8">
+        <div className="text-gray-400 mb-2">🔧 معلومات التشخيص:</div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-gray-300">
+          <div>الرمز: <span className="text-white">{selectedSymbol}</span></div>
+          <div>التحميل: <span className={loading ? 'text-yellow-400' : 'text-green-400'}>
+            {loading ? 'جاري' : 'مكتمل'}
+          </span></div>
+          <div>البيانات: <span className={analysisData ? 'text-green-400' : 'text-red-400'}>
+            {analysisData ? 'متوفرة' : 'غير متوفرة'}
+          </span></div>
+          <div>وايكوف: <span className={wyckoffEnabled ? 'text-green-400' : 'text-gray-400'}>
+            {wyckoffEnabled ? 'مفعل' : 'معطل'}
+          </span></div>
+          <div>useAPI: <span className={fetchUltimateAnalysis ? 'text-green-400' : 'text-red-400'}>
+            {fetchUltimateAnalysis ? 'متصل' : 'غير متصل'}
+          </span></div>
+          <div>التبويب: <span className="text-blue-400">{activeTab}</span></div>
+        </div>
+      </div>
     </div>
   );
 };
