@@ -1,0 +1,455 @@
+/* Dashboard.css - أنماط محسنة مع ألوان احترافية */
+
+/* متغيرات الألوان المحسنة */
+:root {
+  /* ألوان الإشارات */
+  --signal-strong-buy: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --signal-buy: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  --signal-weak-buy: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  --signal-hold: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  --signal-weak-sell: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  --signal-sell: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  --signal-strong-sell: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+
+  /* ألوان الحالات */
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #06b6d4;
+  --neutral: #64748b;
+
+  /* ألوان الخلفيات */
+  --bg-primary: rgba(30, 41, 59, 0.8);
+  --bg-secondary: rgba(51, 65, 85, 0.6);
+  --bg-accent: rgba(15, 23, 42, 0.9);
+  
+  /* حدود وخطوط */
+  --border-primary: rgba(148, 163, 184, 0.2);
+  --border-accent: rgba(6, 182, 212, 0.3);
+  
+  /* ظلال */
+  --shadow-glow: 0 0 20px rgba(6, 182, 212, 0.3);
+  --shadow-card: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* خلفية عامة محسنة */
+.dashboard-container {
+  background: linear-gradient(135deg, 
+    #0f172a 0%, 
+    #1e293b 25%, 
+    #334155 50%, 
+    #1e293b 75%, 
+    #0f172a 100%
+  );
+  background-size: 400% 400%;
+  animation: gradientShift 10s ease infinite;
+  min-height: 100vh;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* كروت محسنة */
+.enhanced-card {
+  background: var(--bg-primary);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.enhanced-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--info), transparent);
+  opacity: 0.5;
+}
+
+.enhanced-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+  border-color: var(--border-accent);
+}
+
+/* أزرار الإشارات */
+.signal-button {
+  padding: 16px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.signal-strong-buy {
+  background: var(--signal-strong-buy);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+.signal-buy {
+  background: var(--signal-buy);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+}
+
+.signal-weak-buy {
+  background: var(--signal-weak-buy);
+  box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+}
+
+.signal-hold {
+  background: var(--signal-hold);
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+}
+
+.signal-weak-sell {
+  background: var(--signal-weak-sell);
+  box-shadow: 0 4px 15px rgba(249, 115, 22, 0.4);
+}
+
+.signal-sell {
+  background: var(--signal-sell);
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+
+.signal-strong-sell {
+  background: var(--signal-strong-sell);
+  box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+}
+
+.signal-button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.signal-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
+}
+
+.signal-button:hover::before {
+  left: 100%;
+}
+
+/* مؤشرات الحالة */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-success {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-danger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.status-info {
+  background: rgba(6, 182, 212, 0.2);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+/* أنيميشن النبضة للمؤشرات */
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulseGlow 2s infinite;
+}
+
+.pulse-success {
+  background: var(--success);
+}
+
+.pulse-warning {
+  background: var(--warning);
+}
+
+.pulse-danger {
+  background: var(--danger);
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* شريط التقدم المحسن */
+.enhanced-progress {
+  width: 100%;
+  height: 8px;
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.enhanced-progress-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-success {
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.progress-warning {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.progress-danger {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.enhanced-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* تأثيرات النص */
+.text-glow {
+  text-shadow: 0 0 10px currentColor;
+}
+
+.text-gradient-success {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-gradient-warning {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-gradient-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-gradient-info {
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* تبويبات محسنة */
+.enhanced-tabs {
+  background: var(--bg-secondary);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  padding: 4px;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.enhanced-tab {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.enhanced-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.enhanced-tab.active {
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+  color: white;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+}
+
+/* أنيميشن التحميل */
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(6, 182, 212, 0.3);
+  border-top: 3px solid #06b6d4;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* تأثيرات التفاعل */
+.interactive-element {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.interactive-element:hover {
+  transform: scale(1.02);
+}
+
+.interactive-element:active {
+  transform: scale(0.98);
+}
+
+/* تصميم متجاوب */
+@media (max-width: 768px) {
+  .enhanced-card {
+    border-radius: 12px;
+    margin: 0 4px;
+  }
+  
+  .signal-button {
+    padding: 12px 16px;
+    min-height: 50px;
+    font-size: 14px;
+  }
+  
+  .enhanced-tabs {
+    padding: 2px;
+  }
+  
+  .enhanced-tab {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+}
+
+/* تأثيرات خاصة للوايكوف */
+.wyckoff-card {
+  background: linear-gradient(135deg, 
+    rgba(245, 158, 11, 0.1) 0%, 
+    rgba(217, 119, 6, 0.1) 100%
+  );
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  position: relative;
+}
+
+.wyckoff-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(245, 158, 11, 0.05) 50%, transparent 70%);
+  pointer-events: none;
+}
+
+/* تصميم الأزرار المحسن */
+.btn-primary {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: none;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.btn-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+/* تأثيرات الزجاج */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-effect-strong {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
