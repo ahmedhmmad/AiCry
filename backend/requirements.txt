@@ -36,3 +36,13 @@ python-dateutil==2.8.2
 
 # HTTP client
 httpx==0.25.2
+
+vaderSentiment==3.3.2
+
+textblob==0.17.1
+nltk==3.8.1
+tweepy
+praw
+python-telegram-bot
+newsapi-python
+aiohttp==3.9.1
