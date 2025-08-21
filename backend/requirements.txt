@@ -46,3 +46,8 @@ praw
 python-telegram-bot
 newsapi-python
 aiohttp==3.9.1
+xgboost==1.7.6
+lightgbm==4.1.0
+catboost==1.2.2
+numba==0.58.1
+ray==2.8.0

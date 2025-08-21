@@ -13,6 +13,11 @@ services:
     env_file:
       - ./backend/.env
     restart: unless-stopped
+  trainer:
+    build: ./backend
+    command: python auto_train_enhanced.py
+    environment:
+      - SCHEDULE_HOURS=6
 
 # Frontend React App
   frontend:

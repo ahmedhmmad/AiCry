@@ -1,643 +1,477 @@
+// components/Dashboard/TradingTab.js
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  BoltIcon,
+import { 
   CurrencyDollarIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
   ClockIcon,
-  ChartBarIcon,
-  BellIcon,
-  CpuChipIcon,
-  SparklesIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  ArrowPathIcon,
+  Cog6ToothIcon,
   PlayIcon,
-  PauseIcon,
   StopIcon,
-  AdjustmentsHorizontalIcon,
-  EyeIcon,
-  FireIcon,
-  LightBulbIcon
+  CheckCircleIcon,
+  XCircleIcon,
+  ExclamationTriangleIcon,
+  BoltIcon,
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
 
-const TradingTab = ({ selectedSymbol, currentPrice, analysisData }) => {
-  const [activeSignals, setActiveSignals] = useState([]);
-  const [tradingMode, setTradingMode] = useState('manual'); // manual, semi-auto, auto
-  const [openPositions, setOpenPositions] = useState([]);
-  const [tradingHistory, setTradingHistory] = useState([]);
-  const [alertSettings, setAlertSettings] = useState({
-    priceAlerts: true,
-    technicalAlerts: true,
-    aiAlerts: true,
-    soundEnabled: true
+export const TradingTab = ({ selectedSymbol, currentPrice, analysisData, tradingData, setTradingData }) => {
+  // استخدام بيانات افتراضية إذا لم يتم تمرير tradingData
+  const defaultTradingData = {
+    orderHistory: [
+      { id: 1, symbol: 'BTCUSDT', side: 'BUY', amount: 0.1, price: 45000, pnl: 500, timestamp: '2024-01-15 10:30', status: 'completed' },
+      { id: 2, symbol: 'ETHUSDT', side: 'SELL', amount: 2, price: 2800, pnl: -150, timestamp: '2024-01-14 15:45', status: 'completed' },
+      { id: 3, symbol: 'BNBUSDT', side: 'BUY', amount: 10, price: 320, pnl: 200, timestamp: '2024-01-13 09:15', status: 'completed' }
+    ],
+    openOrders: [
+      { id: 1, symbol: 'ADAUSDT', side: 'BUY', amount: 1000, price: 1.15, type: 'limit', status: 'pending' },
+      { id: 2, symbol: 'SOLUSDT', side: 'SELL', amount: 5, price: 120, type: 'stop-loss', status: 'pending' }
+    ],
+    tradingSettings: {
+      riskPerTrade: 2,
+      maxPositions: 5,
+      autoTrading: false,
+      stopLoss: 5,
+      takeProfit: 15,
+      trailingStop: true,
+      maxDailyLoss: 500,
+      tradingHours: { start: '09:00', end: '17:00' },
+      allowedSymbols: ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT']
+    }
+  };
+
+  const currentTradingData = tradingData || defaultTradingData;
+  
+  const [newOrder, setNewOrder] = useState({
+    symbol: selectedSymbol || 'BTCUSDT',
+    side: 'BUY',
+    type: 'market',
+    amount: '',
+    price: '',
+    stopLoss: '',
+    takeProfit: ''
   });
-  const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('signals'); // signals, positions, history, settings
 
-  // بيانات تجريبية للإشارات النشطة
-  const mockSignals = [
-    {
-      id: 1,
-      symbol: 'BTCUSDT',
-      type: 'BUY',
-      strength: 'STRONG',
-      price: 43520,
-      target: 45000,
-      stopLoss: 42000,
-      confidence: 85,
-      timeframe: '4h',
-      indicator: 'MACD + RSI',
-      aiScore: 92,
-      timestamp: new Date().toISOString(),
-      status: 'active',
-      reason: 'تقاطع MACD إيجابي مع RSI في منطقة ذروة البيع'
-    },
-    {
-      id: 2,
-      symbol: 'ETHUSDT',
-      type: 'SELL',
-      strength: 'MEDIUM',
-      price: 2655,
-      target: 2580,
-      stopLoss: 2720,
-      confidence: 72,
-      timeframe: '1h',
-      indicator: 'Bollinger Bands',
-      aiScore: 78,
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-      status: 'active',
-      reason: 'السعر يلامس الحد العلوي لبولينجر باند مع تشبع شرائي'
-    },
-    {
-      id: 3,
-      symbol: 'ADAUSDT',
-      type: 'BUY',
-      strength: 'WEAK',
-      price: 0.452,
-      target: 0.475,
-      stopLoss: 0.440,
-      confidence: 65,
-      timeframe: '15m',
-      indicator: 'Support Level',
-      aiScore: 68,
-      timestamp: new Date(Date.now() - 1800000).toISOString(),
-      status: 'pending',
-      reason: 'ارتداد من مستوى دعم قوي مع حجم تداول متزايد'
-    }
-  ];
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
 
-  // بيانات تجريبية للمراكز المفتوحة
-  const mockPositions = [
-    {
-      id: 1,
-      symbol: 'BTCUSDT',
-      type: 'LONG',
-      entryPrice: 42800,
-      currentPrice: 43520,
-      amount: 0.25,
-      value: 10880,
-      pnl: 180,
-      pnlPercent: 1.68,
-      stopLoss: 41500,
-      takeProfit: 45000,
-      openTime: new Date(Date.now() - 7200000).toISOString(),
-      leverage: 1,
-      status: 'open'
-    },
-    {
-      id: 2,
-      symbol: 'ETHUSDT',
-      type: 'SHORT',
-      entryPrice: 2680,
-      currentPrice: 2655,
-      amount: 4,
-      value: 10620,
-      pnl: 100,
-      pnlPercent: 0.93,
-      stopLoss: 2750,
-      takeProfit: 2580,
-      openTime: new Date(Date.now() - 5400000).toISOString(),
-      leverage: 1,
-      status: 'open'
-    }
-  ];
-
-  // بيانات تجريبية لسجل التداول
-  const mockHistory = [
-    {
-      id: 1,
-      symbol: 'BTCUSDT',
-      type: 'LONG',
-      entryPrice: 41200,
-      exitPrice: 42800,
-      amount: 0.5,
-      pnl: 800,
-      pnlPercent: 3.88,
-      openTime: new Date(Date.now() - 86400000).toISOString(),
-      closeTime: new Date(Date.now() - 7200000).toISOString(),
-      status: 'closed'
-    },
-    {
-      id: 2,
-      symbol: 'ETHUSDT',
-      type: 'LONG',
-      entryPrice: 2520,
-      exitPrice: 2580,
-      amount: 5,
-      pnl: 300,
-      pnlPercent: 2.38,
-      openTime: new Date(Date.now() - 172800000).toISOString(),
-      closeTime: new Date(Date.now() - 86400000).toISOString(),
-      status: 'closed'
-    }
-  ];
-
+  // محاكاة الاتصال بـ API
   useEffect(() => {
-    // محاكاة جلب البيانات
-    setLoading(true);
-    setTimeout(() => {
-      setActiveSignals(mockSignals);
-      setOpenPositions(mockPositions);
-      setTradingHistory(mockHistory);
-      setLoading(false);
-    }, 1000);
-  }, [selectedSymbol]);
+    const timer = setTimeout(() => setIsConnected(true), 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
-  // مكون الإشارات النشطة
-  const ActiveSignals = () => (
-    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-semibold text-white flex items-center space-x-2 space-x-reverse">
-          <BoltIcon className="w-6 h-6 text-yellow-400" />
-          <span>الإشارات النشطة</span>
-        </h3>
-        <div className="flex items-center space-x-3 space-x-reverse">
-          <span className="text-sm text-gray-400">التحديث التلقائي</span>
-          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-        </div>
-      </div>
+  // تنفيذ أمر جديد
+  const handlePlaceOrder = () => {
+    if (newOrder.symbol && newOrder.amount && setTradingData) {
+      const order = {
+        id: Date.now(),
+        symbol: newOrder.symbol,
+        side: newOrder.side,
+        amount: parseFloat(newOrder.amount),
+        price: newOrder.type === 'market' ? 'Market' : parseFloat(newOrder.price),
+        type: newOrder.type,
+        status: 'pending',
+        timestamp: new Date().toLocaleString('ar-SA')
+      };
 
-      {loading ? (
-        <div className="text-center py-8">
-          <ArrowPathIcon className="w-12 h-12 text-blue-400 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">جاري تحميل الإشارات...</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {activeSignals.map((signal, index) => (
-            <motion.div
-              key={signal.id}
-              className={`bg-white/5 rounded-xl p-5 border-l-4 ${
-                signal.type === 'BUY' ? 'border-green-500' : 'border-red-500'
-              } hover:bg-white/10 transition-all duration-300`}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3 space-x-reverse">
-                  <div className={`p-2 rounded-lg ${
-                    signal.type === 'BUY' ? 'bg-green-500/20' : 'bg-red-500/20'
-                  }`}>
-                    {signal.type === 'BUY' ? 
-                      <ArrowTrendingUpIcon className="w-6 h-6 text-green-400" /> :
-                      <ArrowTrendingDownIcon className="w-6 h-6 text-red-400" />
-                    }
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-white">{signal.symbol}</h4>
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <span className={`text-sm font-medium ${
-                        signal.type === 'BUY' ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {signal.type}
-                      </span>
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        signal.strength === 'STRONG' ? 'bg-green-500/20 text-green-300' :
-                        signal.strength === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-300' :
-                        'bg-gray-500/20 text-gray-300'
-                      }`}>
-                        {signal.strength}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+      setTradingData(prev => ({
+        ...prev,
+        openOrders: [...prev.openOrders, order]
+      }));
 
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-white">
-                    ${signal.price.toLocaleString()}
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    {signal.timeframe} • {new Date(signal.timestamp).toLocaleTimeString('ar-SA')}
-                  </div>
-                </div>
-              </div>
+      setNewOrder({
+        symbol: selectedSymbol || 'BTCUSDT',
+        side: 'BUY',
+        type: 'market',
+        amount: '',
+        price: '',
+        stopLoss: '',
+        takeProfit: ''
+      });
+      setShowOrderForm(false);
+    }
+  };
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div>
-                  <span className="text-gray-400 text-sm">الهدف:</span>
-                  <div className="text-green-400 font-medium">${signal.target.toLocaleString()}</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-sm">وقف الخسارة:</span>
-                  <div className="text-red-400 font-medium">${signal.stopLoss.toLocaleString()}</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-sm">الثقة:</span>
-                  <div className="text-blue-400 font-medium">{signal.confidence}%</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-sm">AI Score:</span>
-                  <div className="text-purple-400 font-medium">{signal.aiScore}</div>
-                </div>
-              </div>
+  // إلغاء أمر
+  const handleCancelOrder = (orderId) => {
+    if (setTradingData) {
+      setTradingData(prev => ({
+        ...prev,
+        openOrders: prev.openOrders.filter(order => order.id !== orderId)
+      }));
+    }
+  };
 
-              <div className="bg-white/5 rounded-lg p-3 mb-4">
-                <div className="flex items-center space-x-2 space-x-reverse mb-2">
-                  <LightBulbIcon className="w-4 h-4 text-yellow-400" />
-                  <span className="text-yellow-400 text-sm font-medium">تحليل الإشارة</span>
-                </div>
-                <p className="text-gray-300 text-sm">{signal.reason}</p>
-                <div className="flex items-center space-x-2 space-x-reverse mt-2">
-                  <span className="text-gray-400 text-xs">المؤشر:</span>
-                  <span className="text-cyan-400 text-xs">{signal.indicator}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2 space-x-reverse">
-                  <div className={`w-3 h-3 rounded-full ${
-                    signal.status === 'active' ? 'bg-green-400 animate-pulse' :
-                    signal.status === 'pending' ? 'bg-yellow-400' : 'bg-gray-400'
-                  }`}></div>
-                  <span className="text-sm text-gray-400">
-                    {signal.status === 'active' ? 'نشطة' :
-                     signal.status === 'pending' ? 'معلقة' : 'منتهية'}
-                  </span>
-                </div>
-
-                <button className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                  signal.type === 'BUY' 
-                    ? 'bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30'
-                    : 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
-                }`}>
-                  {signal.type === 'BUY' ? '📈 تنفيذ شراء' : '📉 تنفيذ بيع'}
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-  // مكون المراكز المفتوحة
-  const OpenPositions = () => (
-    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-      <h3 className="text-xl font-semibold text-white mb-6 flex items-center space-x-2 space-x-reverse">
-        <ChartBarIcon className="w-6 h-6 text-blue-400" />
-        <span>المراكز المفتوحة</span>
-      </h3>
-
-      {openPositions.length === 0 ? (
-        <div className="text-center py-8">
-          <ChartBarIcon className="w-16 h-16 text-gray-600 mx-auto mb-4 opacity-50" />
-          <p className="text-gray-400">لا توجد مراكز مفتوحة حالياً</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {openPositions.map((position, index) => (
-            <motion.div
-              key={position.id}
-              className="bg-white/5 rounded-xl p-5 hover:bg-white/10 transition-all duration-300"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3 space-x-reverse">
-                  <div className={`p-2 rounded-lg ${
-                    position.type === 'LONG' ? 'bg-green-500/20' : 'bg-red-500/20'
-                  }`}>
-                    {position.type === 'LONG' ? 
-                      <ArrowTrendingUpIcon className="w-6 h-6 text-green-400" /> :
-                      <ArrowTrendingDownIcon className="w-6 h-6 text-red-400" />
-                    }
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-white">{position.symbol}</h4>
-                    <span className={`text-sm font-medium ${
-                      position.type === 'LONG' ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {position.type}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className={`text-2xl font-bold ${
-                    position.pnl >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {position.pnl >= 0 ? '+' : ''}${position.pnl.toLocaleString()}
-                  </div>
-                  <div className={`text-sm ${
-                    position.pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {position.pnlPercent >= 0 ? '+' : ''}{position.pnlPercent.toFixed(2)}%
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div>
-                  <span className="text-gray-400 text-sm">سعر الدخول:</span>
-                  <div className="text-white font-medium">${position.entryPrice.toLocaleString()}</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-sm">السعر الحالي:</span>
-                  <div className="text-white font-medium">${position.currentPrice.toLocaleString()}</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-sm">الكمية:</span>
-                  <div className="text-white font-medium">{position.amount}</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-sm">القيمة:</span>
-                  <div className="text-white font-medium">${position.value.toLocaleString()}</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <span className="text-gray-400 text-sm">وقف الخسارة:</span>
-                  <div className="text-red-400 font-medium">${position.stopLoss.toLocaleString()}</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-sm">جني الأرباح:</span>
-                  <div className="text-green-400 font-medium">${position.takeProfit.toLocaleString()}</div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-400">
-                  فتح في: {new Date(position.openTime).toLocaleString('ar-SA')}
-                </div>
-                <div className="flex items-center space-x-2 space-x-reverse">
-                  <button className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1 rounded text-sm transition-colors">
-                    تعديل
-                  </button>
-                  <button className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1 rounded text-sm transition-colors">
-                    إغلاق
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-  // مكون إعدادات التداول
-  const TradingSettings = () => (
-    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-      <h3 className="text-xl font-semibold text-white mb-6 flex items-center space-x-2 space-x-reverse">
-        <AdjustmentsHorizontalIcon className="w-6 h-6 text-orange-400" />
-        <span>إعدادات التداول</span>
-      </h3>
-
-      <div className="space-y-6">
-        {/* وضع التداول */}
-        <div>
-          <h4 className="text-lg font-semibold text-white mb-4">وضع التداول</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { id: 'manual', name: 'يدوي', desc: 'تنفيذ جميع الصفقات يدوياً', icon: EyeIcon },
-              { id: 'semi-auto', name: 'شبه آلي', desc: 'إشارات تلقائية مع تأكيد يدوي', icon: CpuChipIcon },
-              { id: 'auto', name: 'آلي', desc: 'تنفيذ تلقائي للإشارات', icon: BoltIcon }
-            ].map((mode) => (
-              <button
-                key={mode.id}
-                onClick={() => setTradingMode(mode.id)}
-                className={`p-4 rounded-xl border-2 transition-all duration-300 ${
-                  tradingMode === mode.id
-                    ? 'border-blue-500 bg-blue-500/20'
-                    : 'border-gray-600 hover:border-gray-500'
-                }`}
-              >
-                <mode.icon className={`w-8 h-8 mx-auto mb-2 ${
-                  tradingMode === mode.id ? 'text-blue-400' : 'text-gray-400'
-                }`} />
-                <h5 className="font-semibold text-white mb-1">{mode.name}</h5>
-                <p className="text-gray-400 text-sm">{mode.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* إعدادات التنبيهات */}
-        <div>
-          <h4 className="text-lg font-semibold text-white mb-4">إعدادات التنبيهات</h4>
-          <div className="space-y-4">
-            {Object.entries(alertSettings).map(([key, value]) => (
-              <div key={key} className="flex items-center justify-between bg-white/5 rounded-lg p-4">
-                <div>
-                  <h5 className="text-white font-medium">
-                    {key === 'priceAlerts' ? 'تنبيهات الأسعار' :
-                     key === 'technicalAlerts' ? 'تنبيهات المؤشرات الفنية' :
-                     key === 'aiAlerts' ? 'تنبيهات الذكاء الاصطناعي' :
-                     'تفعيل الصوت'}
-                  </h5>
-                  <p className="text-gray-400 text-sm">
-                    {key === 'priceAlerts' ? 'تنبيهات عند الوصول لأسعار محددة' :
-                     key === 'technicalAlerts' ? 'تنبيهات المؤشرات الفنية' :
-                     key === 'aiAlerts' ? 'تنبيهات توصيات الذكاء الاصطناعي' :
-                     'تشغيل الأصوات للتنبيهات'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setAlertSettings(prev => ({ ...prev, [key]: !value }))}
-                  className={`w-12 h-6 rounded-full transition-colors relative ${
-                    value ? 'bg-green-500' : 'bg-gray-600'
-                  }`}
-                >
-                  <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform ${
-                    value ? 'translate-x-6' : 'translate-x-0.5'
-                  }`}></div>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* إعدادات إدارة المخاطر */}
-        <div>
-          <h4 className="text-lg font-semibold text-white mb-4">إدارة المخاطر</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white/5 rounded-lg p-4">
-              <label className="block text-white font-medium mb-2">الحد الأقصى للمخاطرة لكل صفقة</label>
-              <div className="flex items-center space-x-2 space-x-reverse">
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  defaultValue="2"
-                  className="flex-1"
-                />
-                <span className="text-blue-400 font-medium">2%</span>
-              </div>
-            </div>
-            <div className="bg-white/5 rounded-lg p-4">
-              <label className="block text-white font-medium mb-2">الحد الأقصى للخسارة اليومية</label>
-              <div className="flex items-center space-x-2 space-x-reverse">
-                <input
-                  type="range"
-                  min="5"
-                  max="25"
-                  defaultValue="10"
-                  className="flex-1"
-                />
-                <span className="text-red-400 font-medium">10%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // شريط التبويبات الفرعية
-  const SubTabs = () => (
-    <div className="flex space-x-2 space-x-reverse mb-6">
-      {[
-        { id: 'signals', name: 'الإشارات', icon: BoltIcon },
-        { id: 'positions', name: 'المراكز', icon: ChartBarIcon },
-        { id: 'history', name: 'السجل', icon: ClockIcon },
-        { id: 'settings', name: 'الإعدادات', icon: AdjustmentsHorizontalIcon }
-      ].map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => setViewMode(tab.id)}
-          className={`flex items-center space-x-2 space-x-reverse px-4 py-2 rounded-lg transition-all duration-300 ${
-            viewMode === tab.id
-              ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg'
-              : 'text-gray-400 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <tab.icon className="w-5 h-5" />
-          <span>{tab.name}</span>
-        </button>
-      ))}
-    </div>
-  );
+  // حساب الإحصائيات
+  const stats = {
+    totalTrades: currentTradingData.orderHistory.length,
+    successRate: currentTradingData.orderHistory.filter(order => order.pnl > 0).length / currentTradingData.orderHistory.length * 100,
+    totalPnL: currentTradingData.orderHistory.reduce((sum, order) => sum + order.pnl, 0),
+    averagePnL: currentTradingData.orderHistory.reduce((sum, order) => sum + order.pnl, 0) / currentTradingData.orderHistory.length,
+    bestTrade: Math.max(...currentTradingData.orderHistory.map(order => order.pnl)),
+    worstTrade: Math.min(...currentTradingData.orderHistory.map(order => order.pnl))
+  };
 
   return (
     <div className="space-y-6">
-      {/* رأس القسم */}
-      <motion.div
-        className="bg-gradient-to-r from-orange-900/30 to-amber-900/30 rounded-2xl p-6 border border-orange-500/20"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="flex items-center space-x-4 space-x-reverse">
-          <div className="p-3 rounded-lg bg-gradient-to-r from-orange-500/20 to-amber-500/20">
-            <BoltIcon className="w-8 h-8 text-orange-400" />
+      {/* Trading Status & Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'} animate-pulse`}></div>
+            <span className="text-cyan-400 text-sm">حالة الاتصال</span>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">التداول الذكي قصير المدى</h2>
-            <p className="text-gray-400">
-              إشارات تداول مدعومة بالذكاء الاصطناعي مع إدارة المخاطر المتقدمة
-            </p>
+          <div className="text-white text-lg font-bold">
+            {isConnected ? 'متصل' : 'غير متصل'}
+          </div>
+          <div className="text-gray-400 text-sm">
+            {isConnected ? 'Binance API' : 'محاولة الاتصال...'}
           </div>
         </div>
-      </motion.div>
 
-      {/* ملخص سريع */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <motion.div
-          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
+        <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl p-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400">الإشارات النشطة</span>
-            <BellIcon className="w-5 h-5 text-yellow-400" />
+            <CurrencyDollarIcon className="w-6 h-6 text-green-400" />
+            <span className="text-green-400 text-sm">إجمالي الأرباح</span>
           </div>
-          <div className="text-2xl font-bold text-yellow-400">{activeSignals.length}</div>
-        </motion.div>
+          <div className={`text-2xl font-bold ${stats.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString()}
+          </div>
+          <div className="text-gray-400 text-sm">
+            متوسط: ${stats.averagePnL.toFixed(0)}/صفقة
+          </div>
+        </div>
 
-        <motion.div
-          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
+        <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400">المراكز المفتوحة</span>
-            <ChartBarIcon className="w-5 h-5 text-blue-400" />
+            <div className="text-purple-400">📊</div>
+            <span className="text-purple-400 text-sm">معدل النجاح</span>
           </div>
-          <div className="text-2xl font-bold text-blue-400">{openPositions.length}</div>
-        </motion.div>
+          <div className="text-white text-2xl font-bold">{stats.successRate.toFixed(1)}%</div>
+          <div className="text-gray-400 text-sm">
+            من {stats.totalTrades} صفقة
+          </div>
+        </div>
 
-        <motion.div
-          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
+        <div className="bg-gradient-to-br from-orange-500/20 to-red-500/20 border border-orange-500/30 rounded-xl p-6">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400">الربح/الخسارة اليوم</span>
-            <CurrencyDollarIcon className="w-5 h-5 text-green-400" />
+            <ClockIcon className="w-6 h-6 text-orange-400" />
+            <span className="text-orange-400 text-sm">الأوامر المفتوحة</span>
           </div>
-          <div className="text-2xl font-bold text-green-400">+$280</div>
-        </motion.div>
-
-        <motion.div
-          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400">معدل النجاح</span>
-            <FireIcon className="w-5 h-5 text-purple-400" />
-          </div>
-          <div className="text-2xl font-bold text-purple-400">78%</div>
-        </motion.div>
+          <div className="text-white text-2xl font-bold">{currentTradingData.openOrders.length}</div>
+          <div className="text-gray-400 text-sm">أوامر نشطة</div>
+        </div>
       </div>
 
-      {/* التبويبات الفرعية */}
-      <SubTabs />
+      {/* Trading Settings */}
+      <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3 space-x-reverse">
+            <Cog6ToothIcon className="w-6 h-6 text-cyan-400" />
+            <h3 className="text-cyan-400 font-semibold text-lg">إعدادات التداول</h3>
+          </div>
+          <div className="flex items-center space-x-2 space-x-reverse">
+            <span className="text-gray-400">التداول التلقائي</span>
+            <button
+              onClick={() => setTradingData && setTradingData(prev => ({
+                ...prev,
+                tradingSettings: { ...prev.tradingSettings, autoTrading: !prev.tradingSettings.autoTrading }
+              }))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                currentTradingData.tradingSettings.autoTrading ? 'bg-green-600' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  currentTradingData.tradingSettings.autoTrading ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
 
-      {/* المحتوى حسب التبويب المحدد */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={viewMode}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.3 }}
-        >
-          {viewMode === 'signals' && <ActiveSignals />}
-          {viewMode === 'positions' && <OpenPositions />}
-          {viewMode === 'history' && (
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-              <h3 className="text-xl font-semibold text-white mb-4">سجل التداول</h3>
-              <div className="text-center py-8">
-                <ClockIcon className="w-16 h-16 text-gray-600 mx-auto mb-4 opacity-50" />
-                <p className="text-gray-400">سجل التداول قادم قريباً...</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">المخاطرة لكل صفقة (%)</label>
+              <input 
+                type="number" 
+                value={currentTradingData.tradingSettings.riskPerTrade}
+                onChange={(e) => setTradingData && setTradingData(prev => ({
+                  ...prev,
+                  tradingSettings: { ...prev.tradingSettings, riskPerTrade: Number(e.target.value) }
+                }))}
+                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2"
+                min="0.1"
+                max="10"
+                step="0.1"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">الحد الأقصى للمراكز</label>
+              <input 
+                type="number" 
+                value={currentTradingData.tradingSettings.maxPositions}
+                onChange={(e) => setTradingData && setTradingData(prev => ({
+                  ...prev,
+                  tradingSettings: { ...prev.tradingSettings, maxPositions: Number(e.target.value) }
+                }))}
+                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2"
+                min="1"
+                max="20"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">وقف الخسارة (%)</label>
+              <input 
+                type="number" 
+                value={currentTradingData.tradingSettings.stopLoss}
+                onChange={(e) => setTradingData && setTradingData(prev => ({
+                  ...prev,
+                  tradingSettings: { ...prev.tradingSettings, stopLoss: Number(e.target.value) }
+                }))}
+                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2"
+                min="1"
+                max="20"
+                step="0.5"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">جني الأرباح (%)</label>
+              <input 
+                type="number" 
+                value={currentTradingData.tradingSettings.takeProfit}
+                onChange={(e) => setTradingData && setTradingData(prev => ({
+                  ...prev,
+                  tradingSettings: { ...prev.tradingSettings, takeProfit: Number(e.target.value) }
+                }))}
+                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2"
+                min="5"
+                max="100"
+                step="1"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">الحد الأقصى للخسارة اليومية ($)</label>
+              <input 
+                type="number" 
+                value={currentTradingData.tradingSettings.maxDailyLoss}
+                onChange={(e) => setTradingData && setTradingData(prev => ({
+                  ...prev,
+                  tradingSettings: { ...prev.tradingSettings, maxDailyLoss: Number(e.target.value) }
+                }))}
+                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2"
+                min="100"
+                max="5000"
+                step="50"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">Trailing Stop</span>
+              <button
+                onClick={() => setTradingData && setTradingData(prev => ({
+                  ...prev,
+                  tradingSettings: { ...prev.tradingSettings, trailingStop: !prev.tradingSettings.trailingStop }
+                }))}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  currentTradingData.tradingSettings.trailingStop ? 'bg-blue-600' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                    currentTradingData.tradingSettings.trailingStop ? 'translate-x-5' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Order Form */}
+      <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/30 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-blue-400 font-semibold text-lg">أمر سريع</h3>
+          <button
+            onClick={() => setShowOrderForm(!showOrderForm)}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            {showOrderForm ? 'إخفاء' : 'إظهار النموذج'}
+          </button>
+        </div>
+
+        {showOrderForm && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">العملة</label>
+              <select
+                value={newOrder.symbol}
+                onChange={(e) => setNewOrder(prev => ({ ...prev, symbol: e.target.value }))}
+                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2"
+              >
+                <option value="BTCUSDT">BTCUSDT</option>
+                <option value="ETHUSDT">ETHUSDT</option>
+                <option value="BNBUSDT">BNBUSDT</option>
+                <option value="ADAUSDT">ADAUSDT</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">نوع الأمر</label>
+              <select
+                value={newOrder.side}
+                onChange={(e) => setNewOrder(prev => ({ ...prev, side: e.target.value }))}
+                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2"
+              >
+                <option value="BUY">شراء</option>
+                <option value="SELL">بيع</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-gray-400 text-sm mb-2">الكمية</label>
+              <input
+                type="number"
+                value={newOrder.amount}
+                onChange={(e) => setNewOrder(prev => ({ ...prev, amount: e.target.value }))}
+                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2"
+                placeholder="0.1"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={handlePlaceOrder}
+                disabled={!newOrder.amount}
+                className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-white py-2 rounded-lg transition-colors"
+              >
+                تنفيذ الأمر
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Open Orders */}
+      <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-xl p-6">
+        <h3 className="text-white font-semibold text-lg mb-4">الأوامر المفتوحة</h3>
+        
+        {currentTradingData.openOrders.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <ClockIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <div>لا توجد أوامر مفتوحة</div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {currentTradingData.openOrders.map((order) => (
+              <div key={order.id} className="bg-gray-700/50 rounded-lg p-4 flex justify-between items-center">
+                <div>
+                  <div className="text-white font-semibold">{order.symbol}</div>
+                  <div className="text-sm text-gray-400">
+                    {order.side} • {order.amount} • ${typeof order.price === 'number' ? order.price.toLocaleString() : order.price}
+                  </div>
+                  <div className="text-xs text-gray-500">{order.type}</div>
+                </div>
+                
+                <div className="flex items-center space-x-2 space-x-reverse">
+                  <span className={`px-2 py-1 rounded text-xs ${
+                    order.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                    order.status === 'filled' ? 'bg-green-500/20 text-green-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    {order.status === 'pending' ? 'معلق' :
+                     order.status === 'filled' ? 'منفذ' : 'ملغي'}
+                  </span>
+                  
+                  <button
+                    onClick={() => handleCancelOrder(order.id)}
+                    className="text-red-400 hover:text-red-300 p-1"
+                  >
+                    <XCircleIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Trading History */}
+      <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-xl p-6">
+        <h3 className="text-white font-semibold text-lg mb-4">تاريخ التداول</h3>
+        
+        {currentTradingData.orderHistory.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <div>لا يوجد تاريخ تداول</div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {currentTradingData.orderHistory.slice(0, 5).map((order) => (
+              <div key={order.id} className="bg-gray-700/50 rounded-lg p-4 flex justify-between items-center">
+                <div>
+                  <div className="text-white font-semibold">{order.symbol}</div>
+                  <div className="text-sm text-gray-400">{order.side} • {order.timestamp}</div>
+                </div>
+                <div className="text-right">
+                  <div className={`font-semibold ${order.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {order.pnl >= 0 ? '+' : ''}${order.pnl}
+                  </div>
+                  <div className="text-sm text-gray-400">${order.price.toLocaleString()}</div>
+                </div>
+              </div>
+            ))}
+            
+            {currentTradingData.orderHistory.length > 5 && (
+              <div className="text-center pt-4">
+                <button className="text-blue-400 hover:text-blue-300 text-sm">
+                  عرض المزيد ({currentTradingData.orderHistory.length - 5} صفقة أخرى)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Analysis Integration */}
+      {analysisData && (
+        <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/30 rounded-xl p-6">
+          <h3 className="text-purple-400 font-semibold text-lg mb-4">🧠 نصائح التداول من التحليل</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white/5 rounded-lg p-4">
+              <div className="text-gray-400 text-sm mb-2">التوصية الحالية:</div>
+              <div className="text-white font-semibold">
+                {analysisData.ultimate_decision?.final_recommendation || 'غير متاح'}
+              </div>
+              <div className="text-sm text-gray-400 mt-1">
+                ثقة: {(analysisData.ultimate_decision?.final_confidence || 0).toFixed(1)}%
               </div>
             </div>
-          )}
-          {viewMode === 'settings' && <TradingSettings />}
-        </motion.div>
-      </AnimatePresence>
+            
+            <div className="bg-white/5 rounded-lg p-4">
+              <div className="text-gray-400 text-sm mb-2">السعر المقترح:</div>
+              <div className="text-white font-semibold">
+                ${currentPrice?.toLocaleString() || 'غير متاح'}
+              </div>
+              <div className="text-sm text-gray-400 mt-1">
+                العملة: {selectedSymbol}
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-4 text-xs text-gray-500">
+            💡 استخدم التحليل كدليل فقط. تأكد دائماً من إجراء البحث الخاص بك قبل التداول.
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-
-export { TradingTab };

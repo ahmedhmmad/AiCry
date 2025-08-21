@@ -1,9 +1,9 @@
-// components/Dashboard/ControlCard.js - Enhanced with AI Trading Features (COMPLETE)
+// components/Dashboard/ControlCard.js - Enhanced with AI Trading Features (FIXED)
 import React, { useState, useEffect } from 'react';
 import { 
-  CpuChipIcon, 
   ArrowPathIcon, 
   ChartBarIcon, 
+  CpuChipIcon, 
   ClockIcon, 
   CogIcon,
   SparklesIcon,
