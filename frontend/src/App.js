@@ -1,87 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard/Dashboard';
+import axios from 'axios';
+import API_CONFIG from './config/api.config';
+
+// تكوين axios
+axios.defaults.baseURL = API_CONFIG.BASE_URL;
+axios.defaults.timeout = API_CONFIG.TIMEOUT;
+axios.defaults.headers.common = API_CONFIG.DEFAULT_HEADERS;
 
 function App() {
   const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
   const [analysisData, setAnalysisData] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [apiHealth, setApiHealth] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT'];
-
-  // Check API health only once on mount
-  useEffect(() => {
-    const checkAPI = async () => {
+  // جلب التحليل
+  const fetchAnalysis = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`/ai/ultimate-analysis/${selectedSymbol}`);
+      setAnalysisData(response.data);
+      console.log('📊 Analysis Data:', response.data);
+    } catch (error) {
+      console.error('خطأ في جلب التحليل:', error);
+      // محاولة endpoint بديل
       try {
-        const response = await fetch('http://152.67.153.191:8000/health');
-        if (response.ok) {
-          const health = await response.json();
-          setApiHealth(health);
-        }
-      } catch (error) {
-        console.error('API health check failed:', error);
-        setApiHealth({ status: 'error' });
+        const fallbackResponse = await axios.get(`/analysis/${selectedSymbol}`);
+        setAnalysisData(fallbackResponse.data);
+      } catch (fallbackError) {
+        console.error('فشل الـ fallback:', fallbackError);
       }
-    };
-
-    checkAPI();
-  }, []); // Empty dependency array - only run once
-
-  const getConnectionStatus = () => {
-    if (!apiHealth) return { color: 'yellow', text: 'جاري الفحص...' };
-    if (apiHealth.binance_api === 'connected') return { color: 'green', text: 'متصل بـ Binance API' };
-    return { color: 'red', text: 'غير متصل' };
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const connectionStatus = getConnectionStatus();
+  // جلب التحليل عند تغيير العملة
+  useEffect(() => {
+    fetchAnalysis();
+  }, [selectedSymbol]);
 
   return (
-    <div className="App min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Header */}
-      <header className="bg-white/10 backdrop-blur-md border-b border-white/20 p-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4 space-x-reverse">
-            <h1 className="text-2xl font-bold text-white">لوحة تحكم التداول</h1>
-            <div className="flex items-center space-x-2 space-x-reverse text-sm">
-              <div className={`w-2 h-2 bg-${connectionStatus.color}-400 rounded-full ${connectionStatus.color === 'green' ? 'animate-pulse' : ''}`}></div>
-              <span className={`text-${connectionStatus.color}-400`}>{connectionStatus.text}</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-4 space-x-reverse">
-            <select
-              value={selectedSymbol}
-              onChange={(e) => setSelectedSymbol(e.target.value)}
-              className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-blue-400 focus:outline-none"
-            >
-              {symbols.map(symbol => (
-                <option key={symbol} value={symbol} className="bg-slate-800">
-                  {symbol}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="main-content">
-        <div className="max-w-7xl mx-auto p-6">
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="text-white">جاري التحميل...</div>
-            </div>
-          ) : (
-            <Dashboard 
-              selectedSymbol={selectedSymbol}
-              analysisData={analysisData}
-              setAnalysisData={setAnalysisData}
-              setIsLoading={setIsLoading}
-              apiHealth={apiHealth}
-            />
-          )}
-        </div>
-      </main>
+    <div className="App min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      {/* المحتوى الرئيسي */}
+      <div className="container mx-auto px-4 py-8">
+        <Dashboard
+          selectedSymbol={selectedSymbol}
+          analysisData={analysisData}
+          setAnalysisData={setAnalysisData}
+          loading={loading}
+          onRefresh={fetchAnalysis}
+          onSymbolChange={setSelectedSymbol}
+        />
+      </div>
     </div>
   );
 }
